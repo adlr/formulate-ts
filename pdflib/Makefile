@@ -1,4 +1,4 @@
-all: main.js
+all: ../out/main.js
 
 PDFIUM=/home/adlr/Code/FN/repo/pdfium
 
@@ -19,10 +19,11 @@ OBJS=\
 %.o : %.cc
 	em++ -c $(CFLAGS) -MMD $(INC) -o $@ $<
 
-main.js: $(OBJS)
+../out/main.js: $(OBJS)
 	em++ $(CFLAGS) -o $@ $(OBJS) \
 		-s "EXTRA_EXPORTED_RUNTIME_METHODS=['cwrap']" \
 		-s ALLOW_MEMORY_GROWTH=1 \
 		-s DEMANGLE_SUPPORT=1 \
 		-s MODULARIZE=1 \
+		-s 'EXPORT_NAME="createPDFLib"' \
 		-s TOTAL_MEMORY=268435456

@@ -8,13 +8,16 @@ interface PDFium {
   freeBuf(buf: number): void;
 }
 
-declare var Module: any;
+declare function createPDFLib(): Promise<any>;
 
 export default class PDFDoc {
-  #pdfium: PDFium;
-  constructor(data: Uint8Array) {
+  #pdfium: PDFium | null;
+  constructor() {
+    this.#pdfium = null;
+  }
+  async init(data: Uint8Array) {
     // Get handle to pdfium
-
+    let Module: any = await createPDFLib();
     this.#pdfium = {
       openFile: Module.cwrap('OpenFile', 'number', ['number, number']),
       getPageCount: Module.cwrap('GetPageCount', 'number', []),
@@ -27,6 +30,9 @@ export default class PDFDoc {
     Module._free(buf);
   }
   public pageCount(): number {
+    if (this.#pdfium === null) {
+      throw new Error('PDFDoc not initialized');
+    }
     return this.#pdfium.getPageCount();
   }
   public render(pageno: number, gl: WebGLRenderingContext, complete: any): void {
