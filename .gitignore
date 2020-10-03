@@ -1,3 +1,7 @@
 out/
 node_modules/
 undefined/
+demo.pdf
+package-lock.json
+pdflib/*.d
+pdflib/*.o
