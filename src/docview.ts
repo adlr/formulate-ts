@@ -18,27 +18,29 @@ export default class DocView {
   #scrollInner: HTMLElement;
   #zoom: number;
   #doc: Doc;
-  #unzoomedSize: Size;
+  #size: Size;
   #pageLocations: Array<Rect>;
+  #visibleSubrect: Rect;
 
   constructor(tagPrefix: string, doc: Doc) {
     this.#zoom = 1.0;
-    this.#unzoomedSize = new Size(BORDER_WIDTH * 2, BORDER_WIDTH * 2);
+    this.#size = new Size(BORDER_WIDTH * 2, BORDER_WIDTH * 2);
+    this.#visibleSubrect = Rect.FromSize(this.#size);
     this.#pageLocations = [];
     this.#doc = doc;
     this.#canvas = assertDefined(document.querySelector(`#joint-canvas`));
     this.#scrollOuter = assertDefined(document.querySelector(`#${tagPrefix}-scroll-outer`));
     this.#scrollInner = assertDefined(document.querySelector(`#${tagPrefix}-scroll-inner`));
-    this.updateSizes();
+    this.updateDOM();
     this.#scrollOuter.addEventListener('scroll', (evt) => { this.scrolled(); }, {passive: true});
-    window.addEventListener('resize', (evt) => { this.updateSizes(); });
+    window.addEventListener('resize', (evt) => { this.updateDOM(); });
   }
   // Call this when number of pages or sizes of pages change. Will reload from the doc
   public pagesChanged(): void {
     // Compute the new size
     const pageCount = this.#doc.pageCount();
     if (pageCount === 0) {
-      this.#unzoomedSize.set(BORDER_WIDTH * 2, BORDER_WIDTH * 2);
+      this.#size.set(BORDER_WIDTH * 2, BORDER_WIDTH * 2);
       this.draw();
       return;
     }
@@ -56,31 +58,46 @@ export default class DocView {
     for (let i = 0; i < pageCount; i++) {
       this.#pageLocations[i].origin.x = center - this.#pageLocations[i].size.width / 2;
     }
-    this.#unzoomedSize.set(maxWidth + BORDER_WIDTH * 2, top);
-    this.updateSizes();
+    this.#size.set(maxWidth + BORDER_WIDTH * 2, top);
+    this.updateDOM();
     this.draw();
   }
-  private updateSizes(): void {
+  private updateDOM(): void {
     const rect = this.#canvas.getBoundingClientRect();
     this.#canvas.width = window.devicePixelRatio * rect.width;
     this.#canvas.height = window.devicePixelRatio * rect.height;
     console.log(`set canvas size to ${this.#canvas.width} x ${this.#canvas.height}`);
     this.#scrollInner.style.width = this.#scrollInner.style.minWidth =
-      (this.#unzoomedSize.width * this.#zoom) + 'px';
-    this.#scrollInner.style.height = (this.#unzoomedSize.height * this.#zoom) + 'px'
+      (this.#size.width * this.#zoom) + 'px';
+    this.#scrollInner.style.height = (this.#size.height * this.#zoom) + 'px'
   }
-  private draw(): void {
-
+  private draw(gl: WebGLRenderingContext | null = null): void {
+    // scissor + viewport to just this view
+    for (let i = 0; i < this.#pageLocations.length; i++) {
+      if (!this.#visibleSubrect.intersects(this.#pageLocations[i]))
+        continue;
+      // draw page outline
+      // draw page
+    }
   }
   // scroll event handler
   private scrolled(): void {
+    // Adjust margins of scrollInner to keep it centered
     let marginLeft = 0;
     let marginTop = 0;
-    if (this.#scrollOuter.scrollLeft == 0 ||
-        this.#scrollOuter.scrollTop == 0) {
+    if (this.#scrollOuter.scrollLeft === 0 ||
+        this.#scrollOuter.scrollTop === 0) {
       const style = getComputedStyle(this.#scrollInner);
       marginLeft = parseFloat(style.marginLeft);
       marginTop = parseFloat(style.marginTop);
     }
+
+    // see which subrect of inner is visible
+    this.#visibleSubrect.set(
+        this.#scrollOuter.scrollLeft,
+        this.#scrollOuter.scrollTop,
+        Math.min(this.#scrollOuter.clientWidth, this.#scrollInner.clientWidth),
+        Math.min(this.#scrollOuter.clientHeight, this.#scrollInner.clientHeight));
+    this.draw();
   }
 }
