@@ -17,6 +17,9 @@ export class Size {
     this.width = width;
     this.height = height;
   }
+  reset(): void {
+    this.set(0, 0);
+  }
 }
 
 export class Point {
@@ -90,6 +93,9 @@ export class Rect {
   setBottom(bottom: number) {
     this.size.height = bottom - this.origin.y;
   }
+  reset(): void {
+    this.set(0, 0, 0, 0);
+  }
   intersects(rect: Rect): boolean {
     const l = Math.max(this.left(), rect.left());
     const r = Math.min(this.right(), rect.right());
@@ -109,4 +115,41 @@ export class Rect {
   outsetBy(delta: number) {
     this.insetBy(-delta);
   }
+}
+
+export class Color {
+  readonly rgba = [0, 0, 0, 0];
+}
+
+// Range covers [start, end)
+export class Range {
+  start: number;
+  end: number;
+  constructor(start: number, end: number) {
+    this.start = start;
+    this.end = end;
+  }
+  set(start: number, end: number) {
+    this.start = start;
+    this.end = end;
+  }
+  size(): number {
+    return this.end - this.start;
+  }
+  isEmpty(): boolean {
+    return this.end <= this.start;
+  }
+  contains(n: number): boolean {
+    return n >= this.start && n < this.end;
+  }
+  equals(that: Range): boolean {
+    return this.start == that.start && this.end == that.end;
+  }
+}
+
+export function NonNull<T>(input: T | null): T {
+  if (!input) {
+    throw new Error("Unexpected null value");
+  }
+  return input;
 }

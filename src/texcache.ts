@@ -1,5 +1,7 @@
 // Copyright...
 
+import DocView from "./docview";
+import DrawContext from "./drawcontext";
 import { Size, Rect } from "./geometry";
 
 class Texture {
@@ -64,5 +66,10 @@ export default class TexCache {
         displaySize.width, displaySize.height, 0,
         this.#gl.RGBA, this.#gl.UNSIGNED_BYTE, buf);
     this.#textures.set(pageno, new Texture(pageRect, displaySize, tex));
+  }
+
+  // Handle drawing
+  redraw(docView: DocView): void {
+    //let context = new DrawContext(this.#gl);
   }
 }
