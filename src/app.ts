@@ -135,7 +135,7 @@ async function main(): Promise<void> {
   await PDFDoc.initLib();
 
   // fetch demo file
-  let response = await fetch('../demo.qdf.pdf');
+  let response = await fetch('../demo.pdf');
   if (!response.ok) {
     throw new Error('' + response.status);
   }

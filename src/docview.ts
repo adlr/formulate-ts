@@ -18,6 +18,7 @@ export default class DocView {
   #canvas: HTMLCanvasElement;
   #scrollOuter: HTMLElement;
   #scrollInner: HTMLElement;
+  #scrollContent: HTMLElement;
   #zoom: number;
   #doc: Doc;
   #size: Size;
@@ -40,9 +41,18 @@ export default class DocView {
     this.#canvas = assertDefined(document.querySelector(`#joint-canvas`));
     this.#scrollOuter = assertDefined(document.querySelector(`#${tagPrefix}-scroll-outer`));
     this.#scrollInner = assertDefined(document.querySelector(`#${tagPrefix}-scroll-inner`));
+    this.#scrollContent = assertDefined(document.querySelector(`#${tagPrefix}-content`));
     this.updateDOM();
     this.#scrollOuter.addEventListener('scroll', (evt) => { this.scrolled(); }, {passive: true});
     window.addEventListener('resize', (evt) => { this.updateDOM(); });
+
+    // Zoom handling
+    this.#scrollOuter.addEventListener('pointerdown', (event) => { this.pointerDown(event); })
+    this.#scrollOuter.addEventListener('pointermove', (event) => { this.pointerMove(event); })
+    this.#scrollOuter.addEventListener('pointerup', (event) => { this.pointerUp(event); })
+    this.#scrollOuter.addEventListener('pointercancel', (event) => { this.pointerUp(event); })
+    this.#scrollOuter.addEventListener('pointerout', (event) => { this.pointerUp(event); })
+    this.#scrollOuter.addEventListener('pointerleave', (event) => { this.pointerUp(event); })
   }
   // Call this when number of pages or sizes of pages change. Will reload from the doc
   public pagesChanged(): void {
@@ -73,15 +83,17 @@ export default class DocView {
     //const rect = this.#canvas.getBoundingClientRect();
     this.#canvas.width = window.devicePixelRatio * this.#canvas.clientWidth;
     this.#canvas.height = window.devicePixelRatio * this.#canvas.clientHeight;
-    console.log(`set canvas size to ${this.#canvas.width} x ${this.#canvas.height}`);
+    //console.log(`set canvas size to ${this.#canvas.width} x ${this.#canvas.height}`);
     this.#scrollInner.style.width = this.#scrollInner.style.minWidth =
       (this.#size.width * this.#zoom) + 'px';
-    this.#scrollInner.style.height = (this.#size.height * this.#zoom) + 'px'
+    this.#scrollInner.style.height = (this.#size.height * this.#zoom) + 'px';
+    this.#scrollContent.style.width = this.#scrollContent.style.minWidth = this.#size.width + 'px';
+    this.#scrollContent.style.height = this.#size.height + 'px';
+    this.#scrollContent.style.transform = 'scale(' + this.#zoom + ')';
+    //console.log(`set transform to ${this.#scrollContent.style.transform}`);
   }
   // In |fast| condition, it's okay to be a bit ugly.
   updateGLState(glController: GLController, fast: boolean): void {
-    // TODO: scissor + viewport to just this view
-
     const gl = glController.glContext();
     if (gl === null) {
       console.log(`Unable to get valid GL render context`);
@@ -171,6 +183,8 @@ export default class DocView {
     const dpi = window.devicePixelRatio || 1;
     gl.viewport(outerRect.left * dpi, 0,
                 outerRect.width * dpi, outerRect.height * dpi);
+    //console.log(`viewport: ${outerRect.left * dpi}, 0, ${outerRect.width * dpi}, ${outerRect.height * dpi}`);
+    console.log(`visible subrect: ${this.#visibleSubrect.size.width * this.#zoom} ${this.#visibleSubrect}`);
     gl.useProgram(program.program);
     gl.bindBuffer(gl.ARRAY_BUFFER, this.bgVertices);
     gl.enableVertexAttribArray(program.getAttrLocation('position'));
@@ -231,15 +245,49 @@ export default class DocView {
 
     // see which subrect of inner is visible
     this.#visibleSubrect.set(
-        this.#scrollOuter.scrollLeft,
-        this.#scrollOuter.scrollTop,
-        Math.min(this.#scrollOuter.clientWidth, this.#scrollInner.clientWidth),
-        Math.min(this.#scrollOuter.clientHeight, this.#scrollInner.clientHeight));
+        (this.#scrollOuter.scrollLeft - marginLeft) / this.#zoom,
+        (this.#scrollOuter.scrollTop - marginTop) / this.#zoom,
+        this.#scrollOuter.clientWidth / this.#zoom,
+        this.#scrollOuter.clientHeight / this.#zoom);
     if (this.viewportChangedCallback)
       this.viewportChangedCallback();
   }
   onViewportChanged(callback: () => void): void {
     this.viewportChangedCallback = callback;
+  }
+
+  private pointerEventCache: Map<number, Point> = new Map;
+  private getPointWithoutID(id: number): Point {
+    for (const item of this.pointerEventCache.entries()) {
+      if (item[0] != id)
+        return item[1];
+    }
+    throw new Error("Cant' find finger without ID " + id);
+  }
+  pointerDown(event: PointerEvent) {
+    this.pointerEventCache.set(event.pointerId, new Point(event.clientX, event.clientY));
+  }
+  pointerUp(event: PointerEvent) {
+    this.pointerEventCache.delete(event.pointerId);
+  }
+  pointerMove(event: PointerEvent) {
+    if (!this.pointerEventCache.has(event.pointerId)) {
+      return;
+    }
+    if (this.pointerEventCache.size == 2) {
+      const prev: Point = this.pointerEventCache.get(event.pointerId)!;
+      const pointerIDs = this.pointerEventCache.keys();
+      const otherPrev: Point = this.getPointWithoutID(event.pointerId);
+      const dx = event.clientX - prev.x;
+      const dy = event.clientY - prev.y;
+      const prevDz = Math.sqrt((prev.x - otherPrev.x) * (prev.x - otherPrev.x) + (prev.y - otherPrev.y) * (prev.y - otherPrev.y));
+      const dz = Math.sqrt((event.clientX - otherPrev.x) * (event.clientX - otherPrev.x) + (event.clientY - otherPrev.y) * (event.clientY - otherPrev.y));
+      // update DOM and state
+      this.#zoom *= dz / prevDz;
+      console.log(`set zoom to ${this.#zoom}`);
+      this.updateDOM();
+    }
+    this.pointerEventCache.get(event.pointerId)!.set(event.clientX, event.clientY);
   }
 
   // Coordinate conversion

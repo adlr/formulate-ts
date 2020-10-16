@@ -25,6 +25,7 @@ body {
   display: flex;
   position: absolute;
   overflow: auto;
+  touch-action: pan-x pan-y;
 }
 
 #doc-scroll-inner {
@@ -33,4 +34,11 @@ body {
   width: 2000px;
   min-width: 2000px;
   height: 2000px;
+  margin: auto;
+  overflow: hidden;
+}
+
+#doc-content {
+  width: 2000px;
+  transform-origin: 0 0;
 }
