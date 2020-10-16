@@ -8,7 +8,7 @@ export default class DocController {
     view.onViewportChanged( () => {
       let gl = glController.glContext();
       if (gl) {
-        view.updateGLState(gl, false);
+        view.updateGLState(glController, false);
         view.drawGL(gl, glController.colorTrianges);
       }
     });

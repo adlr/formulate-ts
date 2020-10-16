@@ -16,6 +16,20 @@ export class Texture {
     this.size.reset();
     this.pageLoc.reset();
   }
+  // Returns true iff |rect| (in page coords) is covered by |pageLoc|.
+  // If |size| is passed and |rect| is covered, returns true iff the covered size is at least
+  // |size| pixels.
+  contains(rect: Rect, size: Size = new Size()): boolean {
+    if (!this.pageLoc.contains(rect)) {
+      //console.log(`${this.pageLoc} doesn't contain ${rect}`);
+      return false;
+    }
+    if (size.width < 1 || size.height < 1)
+      return true;
+    const coveredWidth = this.pageLoc.size.width * this.size.width / rect.size.width;
+    const coveredHeight = this.pageLoc.size.height * this.size.height / rect.size.height;
+    return (coveredWidth >= size.width) && (coveredHeight >= size.height);
+  }
 }
 
 export class GLProgram {
@@ -86,6 +100,7 @@ function createProgram(gl: WebGLRenderingContext, vGLSL: string, fGLSL: string):
 export class GLController {
   private readonly canvas: HTMLCanvasElement;
   readonly colorTrianges: GLProgram;
+  readonly drawTex: GLProgram;
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas;
     let gl = canvas.getContext('webgl');
@@ -108,6 +123,29 @@ export class GLController {
         void main() {
           gl_FragColor = v_color;
         }`), [['position', false], ['color', false], ['transform', true]]);
+    this.drawTex = new GLProgram(gl, createProgram(gl, `
+        attribute vec2 position;
+        attribute vec2 texcoord;
+        
+        uniform mat3 transform;
+        
+        varying vec2 v_texcoord;
+        
+        void main() {
+          gl_Position = vec4((transform * vec3(position, 1)).xy, 0, 1);
+          v_texcoord = texcoord;
+        }
+        `, `
+        precision mediump float;
+ 
+        varying vec2 v_texcoord;
+        
+        uniform sampler2D u_texture;
+        
+        void main() {
+          gl_FragColor = texture2D(u_texture, v_texcoord);
+        }
+        `), [['position', false], ['texcoord', false], ['u_texture', true], ['transform', true]]);
   }
   glContext(): WebGLRenderingContext | null {
     return this.canvas.getContext('webgl');

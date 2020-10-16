@@ -2,7 +2,7 @@
 
 import { Size, Rect, Point, Range } from "./geometry";
 import Doc from "./doc";
-import { GLProgram, Texture } from "./glcontroller";
+import { GLController, GLProgram, Texture } from "./glcontroller";
 import { mat3 } from "gl-matrix";
 
 function assertDefined<T>(input : T | null): T {
@@ -79,8 +79,14 @@ export default class DocView {
     this.#scrollInner.style.height = (this.#size.height * this.#zoom) + 'px'
   }
   // In |fast| condition, it's okay to be a bit ugly.
-  updateGLState(gl: WebGLRenderingContext, fast: boolean): void {
+  updateGLState(glController: GLController, fast: boolean): void {
     // TODO: scissor + viewport to just this view
+
+    const gl = glController.glContext();
+    if (gl === null) {
+      console.log(`Unable to get valid GL render context`);
+      return;
+    }
 
     let pages = new Range(Number.MAX_SAFE_INTEGER, 0);
     for (let i = 0; i < this.#pageLocations.length; i++) {
@@ -95,10 +101,16 @@ export default class DocView {
       this.setGLBGBorders(gl, pages);
     }
 
-    // If we're being quick, stop now
-    if (fast) {
-      this.bgPositionPages.set(pages.start, pages.end);
-      return;
+    // If we're not being fast, update textures
+    if (!fast) {
+      const start = Math.min(pages.start, this.bgPositionPages.start);
+      const end = Math.max(pages.end, this.bgPositionPages.end);
+      for (let i = start; i < end; i++) {
+        const pageRect = this.#visibleSubrect.intersect(this.#pageLocations[i]);
+        this.convertRectToPageInPlace(i, pageRect);
+        const outSize = new Size(pageRect.size.width * this.#zoom, pageRect.size.height * this.#zoom);
+        this.#doc.updateGLState(glController, false, i, pageRect, outSize);
+      }
     }
     
     // Update textures, possibly rerendering
@@ -191,6 +203,8 @@ export default class DocView {
     mat3.translate(transform, transform, [-this.#visibleSubrect.origin.x, -this.#visibleSubrect.origin.y]);
     gl.uniformMatrix3fv(program.getULocation('transform'), false, transform);
     gl.drawArrays(gl.TRIANGLES, 0, 12 * this.bgPositionPages.size());
+
+    // Draw each visible page
   }
   // scroll event handler
   public scrolled(): void {
@@ -215,5 +229,15 @@ export default class DocView {
   }
   onViewportChanged(callback: () => void): void {
     this.viewportChangedCallback = callback;
+  }
+
+  // Coordinate conversion
+  convertRectFromPageInPlace(pageno: number, rect: Rect): void {
+    rect.origin.x += this.#pageLocations[pageno].origin.x;
+    rect.origin.y += this.#pageLocations[pageno].origin.y;
+  }
+  convertRectToPageInPlace(pageno: number, rect: Rect): void {
+    rect.origin.x -= this.#pageLocations[pageno].origin.x;
+    rect.origin.y -= this.#pageLocations[pageno].origin.y;
   }
 }

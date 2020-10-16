@@ -20,6 +20,9 @@ export class Size {
   reset(): void {
     this.set(0, 0);
   }
+  isEmpty(): boolean {
+    return this.width <= 0 || this.height <= 0;
+  }
 }
 
 export class Point {
@@ -104,6 +107,27 @@ export class Rect {
     const t = Math.max(this.top(), rect.top());
     const b = Math.min(this.bottom(), rect.bottom());
     return t < b;
+  }
+  // Sets this to the intersection of this and rect
+  intersectWithLTRB(l: number, t: number, r: number, b: number): void {
+    this.setLeft(Math.max(this.left(), l));
+    this.setRight(Math.min(this.right(), r));
+    this.setTop(Math.max(this.top(), t));
+    this.setBottom(Math.min(this.bottom(), b));
+  }
+  intersectWith(rect: Rect): void {
+    this.intersectWithLTRB(rect.left(), rect.top(), rect.right(), rect.bottom());
+  }
+  intersect(rect: Rect): Rect {
+    const ret = Rect.FromRect(this);
+    ret.intersectWith(rect);
+    return ret;
+  }
+  contains(rect: Rect): boolean {
+    return this.left() <= rect.left() &&
+        this.top() <= rect.top() &&
+        this.right() >= rect.right() &&
+        this.bottom() >= rect.bottom();
   }
   // Updates this rectanble to be smaller by |delta| on each side.
   insetBy(delta: number) {
