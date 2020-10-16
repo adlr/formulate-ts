@@ -135,7 +135,7 @@ async function main(): Promise<void> {
   await PDFDoc.initLib();
 
   // fetch demo file
-  let response = await fetch('../demo.pdf');
+  let response = await fetch('../demo.qdf.pdf');
   if (!response.ok) {
     throw new Error('' + response.status);
   }
@@ -147,6 +147,7 @@ async function main(): Promise<void> {
   const glController: GLController = new GLController(canvas);
   const docController = new DocController(docView, glController);
   docView.pagesChanged();
+  docView.scrolled();
 
   
   // const gl = NonNull(canvas.getContext('webgl'));

@@ -9,7 +9,7 @@ export default class DocController {
       let gl = glController.glContext();
       if (gl) {
         view.updateGLState(glController, false);
-        view.drawGL(gl, glController.colorTrianges);
+        view.drawGL(glController, glController.colorTrianges);
       }
     });
   }

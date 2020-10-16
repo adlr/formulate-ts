@@ -38,7 +38,8 @@ export default class PDFDoc {
     const buf: number = PDFDoc.module._malloc(data.length);
     PDFDoc.module.HEAPU8.set(data, buf);
     this.#pdfium.openFile(buf, data.length);
-    PDFDoc.module._free(buf);
+    // PDFium needs to own these bytes, do don't free them
+    //PDFDoc.module._free(buf);
   }
   public pageCount(): number {
     return this.#pdfium.getPageCount();
@@ -56,6 +57,7 @@ export default class PDFDoc {
     let tr = mat3.create();
     mat3.scale(tr, tr, [pageRect.size.width / outSize.width, pageRect.size.height / outSize.height]);
     mat3.translate(tr, tr, [pageRect.origin.x, pageRect.origin.y]);
+    //console.log(`Render: ${outSize} page ${pageno} mat: ${tr}`);
     const bufPtr: number = this.#pdfium.render(pageno, outSize.width, outSize.height,
         tr[0], tr[1], tr[3], tr[4], tr[6], tr[7]);
     if (bufPtr === 0) {
@@ -69,6 +71,10 @@ export default class PDFDoc {
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+
+    // gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE,
+    //   new Uint8Array([0, 0, 255, 255]));
+
     gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, outSize.width, outSize.height, 0, gl.RGBA, gl.UNSIGNED_BYTE, arr);
     this.#pdfium.freeBuf(bufPtr);
     return tex;

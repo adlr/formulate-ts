@@ -1,6 +1,6 @@
 all: ../out/main.js
 
-PDFIUM=/home/adlr/Code/FN/repo/pdfium
+PDFIUM=/home/adlr/Code/FN/repo_stable/pdfium.git@d080048b1c862d222f4893936f48a65405397723
 
 CFLAGS=\
 	-std=c++17 \

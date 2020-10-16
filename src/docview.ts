@@ -1,9 +1,9 @@
 // Copyright...
 
-import { Size, Rect, Point, Range } from "./geometry";
+import { Size, Rect, Point, Range, NonNull } from "./geometry";
 import Doc from "./doc";
 import { GLController, GLProgram, Texture } from "./glcontroller";
-import { mat3 } from "gl-matrix";
+import { mat3, vec3 } from "gl-matrix";
 
 function assertDefined<T>(input : T | null): T {
   if (input === null || input === undefined) {
@@ -136,7 +136,6 @@ export default class DocView {
     let vertexColors: Array<number> = [];  // n * r, g, b, a - UInt8
     const BORDER_SIZE = 1;  // black border
     for (let i = pages.start; i < pages.end; i++) {
-      console.log(`setting borders for page ${i}`)
       const rect = this.#pageLocations[i];
       const outer = Rect.FromRect(rect);
       outer.outsetBy(1);
@@ -161,12 +160,13 @@ export default class DocView {
     this.bgPositionPages.set(0, 0);
     this.pageTextures.clear();
   }
-  drawGL(gl: WebGLRenderingContext, program: GLProgram): void {
+  drawGL(glController: GLController, program: GLProgram): void {
     // draw background rectangles
     if (this.bgPositionPages.isEmpty()) {
       console.log('nothing to draw in docview');
       return;
     }
+    const gl = NonNull(glController.glContext());
     const outerRect = this.#scrollOuter.getBoundingClientRect();
     const dpi = window.devicePixelRatio || 1;
     gl.viewport(outerRect.left * dpi, 0,
@@ -205,6 +205,17 @@ export default class DocView {
     gl.drawArrays(gl.TRIANGLES, 0, 12 * this.bgPositionPages.size());
 
     // Draw each visible page
+    for (let i = this.bgPositionPages.start; i < this.bgPositionPages.end; i++) {
+      const pageTransform = mat3.create();
+      mat3.translate(pageTransform, transform, [this.#pageLocations[i].origin.x,
+                                                this.#pageLocations[i].origin.y]);
+      // const outVec = vec3.create();
+      // vec3.transformMat3(outVec, [0, 0, 1], pageTransform);
+      // const outBR = vec3.create();
+      // vec3.transformMat3(outBR, [this.#pageLocations[i].size.width, this.#pageLocations[i].size.height, 1], pageTransform);
+      // console.log(`Page ${i}: ${outVec}, ${outBR}`);
+      this.#doc.drawGL(glController, i, pageTransform);
+    }
   }
   // scroll event handler
   public scrolled(): void {
