@@ -95,7 +95,9 @@ export default class DocView {
   }
   // In |fast| condition, it's okay to be a bit ugly.
   updateGLState(glController: GLController, fast: boolean): void {
-    fast = this.pointerEventCache.size > 0;
+    if (!fast) {
+      console.log('update gl state slow');
+    }
     const gl = glController.glContext();
     if (gl === null) {
       console.log(`Unable to get valid GL render context`);
@@ -232,7 +234,16 @@ export default class DocView {
     }
   }
   // scroll event handler
+  private recentScrollTimeout: number | null = null;
   public scrolled(): void {
+    if (this.recentScrollTimeout) {
+      window.clearTimeout(this.recentScrollTimeout);
+    }
+    this.recentScrollTimeout = window.setTimeout(() => {
+      console.log(`time fired`);
+      this.recentScrollTimeout = null;
+      this.updateVisibleSubrect();
+    }, 200);
     this.updateVisibleSubrect();
   }
   private updateVisibleSubrect(): void {
@@ -253,8 +264,8 @@ export default class DocView {
         this.#scrollOuter.clientWidth / this.#zoom,
         this.#scrollOuter.clientHeight / this.#zoom);
     if (this.viewportChangedCallback) {
-      console.log(`ptr event size: ${this.pointerEventCache.size}`);
-      this.viewportChangedCallback(this.pointerEventCache.size > 0);
+      this.viewportChangedCallback(this.pointerEventCache.size > 0 ||
+                                   this.recentScrollTimeout !== null);
     }    
   }
   onViewportChanged(callback: (boolean) => void): void {

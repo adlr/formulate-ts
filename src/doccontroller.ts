@@ -8,7 +8,6 @@ export default class DocController {
     view.onViewportChanged( (fast: boolean) => {
       let gl = glController.glContext();
       if (gl) {
-        console.log(`updating gl state: ${fast}`);
         view.updateGLState(glController, fast);
         view.drawGL(glController, glController.colorTrianges);
       }

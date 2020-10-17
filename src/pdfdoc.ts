@@ -58,7 +58,7 @@ export default class PDFDoc {
     let tr = mat3.create();
     mat3.scale(tr, tr, [pixWidth / pageRect.size.width, pixHeight / pageRect.size.height ]);
     mat3.translate(tr, tr, [-pageRect.origin.x, -pageRect.origin.y]);
-    console.log(`Render: ${outSize} page ${pageno} rect: ${pageRect} mat: ${tr}`);
+    // console.log(`Render: ${outSize} page ${pageno} rect: ${pageRect} mat: ${tr}`);
     const bufPtr: number = this.#pdfium.render(pageno, pixWidth, pixHeight,
         tr[0], tr[1], tr[3], tr[4], tr[6], tr[7]);
     if (bufPtr === 0) {

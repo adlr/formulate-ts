@@ -29,7 +29,6 @@ export class Texture {
     const coveredWidth = rect.size.width * this.size.width / this.pageLoc.size.width;
     const coveredHeight = rect.size.height * this.size.height / this.pageLoc.size.height;
     const ret = (coveredWidth >= size.width) && (coveredHeight >= size.height);
-    console.log(`Tex contains: ${ret}`);
     return ret;
   }
 }
