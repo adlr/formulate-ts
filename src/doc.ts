@@ -80,8 +80,10 @@ export default class Doc {
       return;
     }
     if (this.pageGLState.has(pageno)) {
-      if (this.pageGLState.get(pageno)!.tex.contains(rect, outSize))
+      if (this.pageGLState.get(pageno)!.tex.contains(rect, outSize)) {
+        console.log(`no need to rerender page ${pageno}`);
         return;
+      }
       // Need to rerender
       this.pageGLState.get(pageno)!.free(gl);
       this.pageGLState.delete(pageno);

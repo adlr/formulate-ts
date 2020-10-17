@@ -24,7 +24,7 @@ export default class DocView {
   #size: Size;
   #pageLocations: Array<Rect>;
   #visibleSubrect: Rect;
-  private viewportChangedCallback: (() => void) | null = null;
+  private viewportChangedCallback: ((boolean) => void) | null = null;
 
   // GL state:
   private bgVertices: WebGLBuffer | null = null;
@@ -91,9 +91,11 @@ export default class DocView {
     this.#scrollContent.style.height = this.#size.height + 'px';
     this.#scrollContent.style.transform = 'scale(' + this.#zoom + ')';
     //console.log(`set transform to ${this.#scrollContent.style.transform}`);
+    this.updateVisibleSubrect();
   }
   // In |fast| condition, it's okay to be a bit ugly.
   updateGLState(glController: GLController, fast: boolean): void {
+    fast = this.pointerEventCache.size > 0;
     const gl = glController.glContext();
     if (gl === null) {
       console.log(`Unable to get valid GL render context`);
@@ -120,12 +122,12 @@ export default class DocView {
       for (let i = start; i < end; i++) {
         const pageRect = this.#visibleSubrect.intersect(this.#pageLocations[i]);
         this.convertRectToPageInPlace(i, pageRect);
-        const outSize = new Size(pageRect.size.width * this.#zoom, pageRect.size.height * this.#zoom);
+        const outSize = new Size(pageRect.size.width * this.#zoom * window.devicePixelRatio,
+                                 pageRect.size.height * this.#zoom * window.devicePixelRatio);
         this.#doc.updateGLState(glController, false, i, pageRect, outSize);
       }
     }
     
-    // Update textures, possibly rerendering
     this.bgPositionPages.set(pages.start, pages.end);
   }
   private setGLBGBorders(gl: WebGLRenderingContext, pages: Range): void {
@@ -183,8 +185,6 @@ export default class DocView {
     const dpi = window.devicePixelRatio || 1;
     gl.viewport(outerRect.left * dpi, 0,
                 outerRect.width * dpi, outerRect.height * dpi);
-    //console.log(`viewport: ${outerRect.left * dpi}, 0, ${outerRect.width * dpi}, ${outerRect.height * dpi}`);
-    console.log(`visible subrect: ${this.#visibleSubrect.size.width * this.#zoom} ${this.#visibleSubrect}`);
     gl.useProgram(program.program);
     gl.bindBuffer(gl.ARRAY_BUFFER, this.bgVertices);
     gl.enableVertexAttribArray(program.getAttrLocation('position'));
@@ -233,6 +233,9 @@ export default class DocView {
   }
   // scroll event handler
   public scrolled(): void {
+    this.updateVisibleSubrect();
+  }
+  private updateVisibleSubrect(): void {
     // Adjust margins of scrollInner to keep it centered
     let marginLeft = 0;
     let marginTop = 0;
@@ -249,10 +252,12 @@ export default class DocView {
         (this.#scrollOuter.scrollTop - marginTop) / this.#zoom,
         this.#scrollOuter.clientWidth / this.#zoom,
         this.#scrollOuter.clientHeight / this.#zoom);
-    if (this.viewportChangedCallback)
-      this.viewportChangedCallback();
+    if (this.viewportChangedCallback) {
+      console.log(`ptr event size: ${this.pointerEventCache.size}`);
+      this.viewportChangedCallback(this.pointerEventCache.size > 0);
+    }    
   }
-  onViewportChanged(callback: () => void): void {
+  onViewportChanged(callback: (boolean) => void): void {
     this.viewportChangedCallback = callback;
   }
 
@@ -269,6 +274,7 @@ export default class DocView {
   }
   pointerUp(event: PointerEvent) {
     this.pointerEventCache.delete(event.pointerId);
+    this.updateDOM();
   }
   pointerMove(event: PointerEvent) {
     if (!this.pointerEventCache.has(event.pointerId)) {
@@ -284,7 +290,6 @@ export default class DocView {
       const dz = Math.sqrt((event.clientX - otherPrev.x) * (event.clientX - otherPrev.x) + (event.clientY - otherPrev.y) * (event.clientY - otherPrev.y));
       // update DOM and state
       this.#zoom *= dz / prevDz;
-      console.log(`set zoom to ${this.#zoom}`);
       this.updateDOM();
     }
     this.pointerEventCache.get(event.pointerId)!.set(event.clientX, event.clientY);

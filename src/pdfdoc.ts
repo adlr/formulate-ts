@@ -52,13 +52,14 @@ export default class PDFDoc {
     const tex = gl.createTexture();
     if (tex === null)
       throw new Error("Unable to allocate GL texture");
-    
+    const pixWidth = Math.round(outSize.width);
+    const pixHeight = Math.round(outSize.height);
     // Render the texture
     let tr = mat3.create();
-    mat3.scale(tr, tr, [pageRect.size.width / outSize.width, pageRect.size.height / outSize.height]);
-    mat3.translate(tr, tr, [pageRect.origin.x, pageRect.origin.y]);
-    //console.log(`Render: ${outSize} page ${pageno} mat: ${tr}`);
-    const bufPtr: number = this.#pdfium.render(pageno, outSize.width, outSize.height,
+    mat3.scale(tr, tr, [pixWidth / pageRect.size.width, pixHeight / pageRect.size.height ]);
+    mat3.translate(tr, tr, [-pageRect.origin.x, -pageRect.origin.y]);
+    console.log(`Render: ${outSize} page ${pageno} rect: ${pageRect} mat: ${tr}`);
+    const bufPtr: number = this.#pdfium.render(pageno, pixWidth, pixHeight,
         tr[0], tr[1], tr[3], tr[4], tr[6], tr[7]);
     if (bufPtr === 0) {
       gl.deleteTexture(tex);
@@ -66,7 +67,7 @@ export default class PDFDoc {
     }
     // copy data to the texture and free the data from wasm
     let arr = new Uint8ClampedArray(PDFDoc.module.HEAPU8.buffer,
-        bufPtr, outSize.width * outSize.height * 4);
+        bufPtr, pixWidth * pixHeight * 4);
     gl.bindTexture(gl.TEXTURE_2D, tex);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
@@ -75,7 +76,7 @@ export default class PDFDoc {
     // gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE,
     //   new Uint8Array([0, 0, 255, 255]));
 
-    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, outSize.width, outSize.height, 0, gl.RGBA, gl.UNSIGNED_BYTE, arr);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, pixWidth, pixHeight, 0, gl.RGBA, gl.UNSIGNED_BYTE, arr);
     this.#pdfium.freeBuf(bufPtr);
     return tex;
   }

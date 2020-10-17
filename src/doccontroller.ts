@@ -5,10 +5,11 @@ import { GLController } from "./glcontroller";
 
 export default class DocController {
   constructor(view: DocView, glController: GLController) {
-    view.onViewportChanged( () => {
+    view.onViewportChanged( (fast: boolean) => {
       let gl = glController.glContext();
       if (gl) {
-        view.updateGLState(glController, false);
+        console.log(`updating gl state: ${fast}`);
+        view.updateGLState(glController, fast);
         view.drawGL(glController, glController.colorTrianges);
       }
     });

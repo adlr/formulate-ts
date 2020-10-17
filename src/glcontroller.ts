@@ -26,9 +26,11 @@ export class Texture {
     }
     if (size.width < 1 || size.height < 1)
       return true;
-    const coveredWidth = this.pageLoc.size.width * this.size.width / rect.size.width;
-    const coveredHeight = this.pageLoc.size.height * this.size.height / rect.size.height;
-    return (coveredWidth >= size.width) && (coveredHeight >= size.height);
+    const coveredWidth = rect.size.width * this.size.width / this.pageLoc.size.width;
+    const coveredHeight = rect.size.height * this.size.height / this.pageLoc.size.height;
+    const ret = (coveredWidth >= size.width) && (coveredHeight >= size.height);
+    console.log(`Tex contains: ${ret}`);
+    return ret;
   }
 }
 
