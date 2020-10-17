@@ -1,14 +1,51 @@
 // Copyright...
 
+#include <algorithm>
 #include <memory>
 #include <stdio.h>
+#include <vector>
 
 #include <emscripten.h>
 
 #include "public/fpdfview.h"
 #include "public/cpp/fpdf_scopers.h"
 
+namespace {
+
 FPDF_DOCUMENT g_doc_;
+
+// For now, just keep all pages opened forever.
+std::vector<ScopedFPDFPage>* pages_ = nullptr;
+
+FPDF_PAGE GetPage(int pageno) {
+  if (!pages_) {
+    fprintf(stderr, "Missing pages cache\n");
+    return nullptr;
+  }
+  if (!g_doc_) {
+    fprintf(stderr, "Missing doc\n");
+    return nullptr;
+  }
+  if (pageno < 0) {
+    fprintf(stderr, "Can't load negative page\n");
+    return nullptr;
+  }
+  if (pages_->size() > pageno && (*pages_)[pageno].get())
+    return (*pages_)[pageno].get();
+  // Load the page
+  if (FPDF_GetPageCount(g_doc_) <= pageno) {
+    fprintf(stderr, "Load Page %d is out of range\n", pageno);
+    return nullptr;
+  }
+  pages_->resize(std::max(pages_->size(), static_cast<size_t>(pageno + 1)));
+  (*pages_)[pageno] = ScopedFPDFPage(FPDF_LoadPage(g_doc_, pageno));
+  if (!(*pages_)[pageno].get()) {
+    fprintf(stderr, "Failed to load page %d\n", pageno);
+  }
+  return (*pages_)[pageno].get();
+}
+
+}  // namespace {}
 
 extern "C" {
 
@@ -22,6 +59,8 @@ void OpenFile(char* bytes, size_t length) {
   config.m_v8EmbedderSlot = 0;
 
   FPDF_InitLibraryWithConfig(&config);
+
+  pages_ = new std::vector<ScopedFPDFPage>();
   
   g_doc_ = FPDF_LoadMemDocument(bytes, length, nullptr);
 }
@@ -33,24 +72,22 @@ int GetPageCount() {
 
 EMSCRIPTEN_KEEPALIVE
 double GetPageWidth(int pageno) {
-  ScopedFPDFPage page(FPDF_LoadPage(g_doc_, pageno));
+  FPDF_PAGE page = GetPage(pageno);
   if (!page) {
-    fprintf(stderr, "Failed to load page %d\n", pageno);
     return -1.0;
   }
 
-  return FPDF_GetPageWidth(page.get());
+  return FPDF_GetPageWidth(page);
 }
 
 EMSCRIPTEN_KEEPALIVE
 double GetPageHeight(int pageno) {
-  ScopedFPDFPage page(FPDF_LoadPage(g_doc_, pageno));
+  FPDF_PAGE page = GetPage(pageno);
   if (!page) {
-    fprintf(stderr, "Failed to load page %d\n", pageno);
     return -1.0;
   }
 
-  return FPDF_GetPageHeight(page.get());
+  return FPDF_GetPageHeight(page);
 }
 
 EMSCRIPTEN_KEEPALIVE
@@ -69,9 +106,8 @@ char* Render(int pageno, int out_width, int out_height,
   //   }
   // }
 
-  ScopedFPDFPage page(FPDF_LoadPage(g_doc_, pageno));
+  FPDF_PAGE page = GetPage(pageno);
   if (!page) {
-    fprintf(stderr, "Failed to load page %d\n", pageno);
     free(raw_buf);
     return nullptr;
   }
@@ -89,7 +125,7 @@ char* Render(int pageno, int out_width, int out_height,
   FS_MATRIX pdfmatrix = {a, b, c, d, e, f};
   FS_RECTF clip = {0, 0, static_cast<float>(out_width),
                    static_cast<float>(out_height)};
-  FPDF_RenderPageBitmapWithMatrix(bitmap.get(), page.get(), &pdfmatrix,
+  FPDF_RenderPageBitmapWithMatrix(bitmap.get(), page, &pdfmatrix,
 				  &clip, FPDF_ANNOT | FPDF_REVERSE_BYTE_ORDER);
   return raw_buf;
 }

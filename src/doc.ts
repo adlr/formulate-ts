@@ -28,26 +28,16 @@ class PageGLState {
 export default class Doc {
   #overlays: Array<Array<Overlay>>;
   #pdfdoc: PDFDoc;
-  // Cache page sizes as it's a bit expensive to read them from the PDF
-  #pageSizes: Array<Size>;
 
   constructor(pdfdoc: PDFDoc) {
     this.#overlays = [];
     this.#pdfdoc = pdfdoc;
-    this.#pageSizes = [];
-    this.updatePageSizes();
   }
   public pageCount(): number {
-    return this.#pageSizes.length;
-  }
-  private updatePageSizes(): void {
-    const pages = this.#pdfdoc.pageCount();
-    for (let i = 0; i < pages; i++) {
-      this.#pageSizes.push(this.#pdfdoc.pageSize(i));
-    }
+    return this.#pdfdoc.pageCount();
   }
   public pageSize(pageno: number): Size {
-    return this.#pageSizes[pageno];
+    return this.#pdfdoc.pageSize(pageno);
   }
 
   pageGLState: Map<number, PageGLState> = new Map();
@@ -59,7 +49,8 @@ export default class Doc {
       console.log(`Non-square scale factor found`);
     }
     pageRect.outsetBy(EXPAND_PIXELS / scale);
-    pageRect.intersectWithLTRB(0, 0, this.#pageSizes[pageno].width, this.#pageSizes[pageno].height);
+    const pageSize = this.pageSize(pageno);
+    pageRect.intersectWithLTRB(0, 0, pageSize.width, pageSize.height);
     outSize.set(pageRect.size.width * scale, pageRect.size.height * scale);
   }
 

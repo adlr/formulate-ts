@@ -243,7 +243,7 @@ export default class DocView {
       console.log(`time fired`);
       this.recentScrollTimeout = null;
       this.updateVisibleSubrect();
-    }, 200);
+    }, 20);
     this.updateVisibleSubrect();
   }
   private updateVisibleSubrect(): void {
