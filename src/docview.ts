@@ -86,7 +86,6 @@ export default class DocView {
   private scrollLeft: number = -1;
   private scrollTop: number = -1;
   private setScrollLeft(value: number): void {
-    console.log(`updating scrollLeft: ${this.#scrollOuter.scrollLeft} -> ${value}`);
     this.#scrollOuter.scrollLeft = this.scrollLeft = value;
   }
   private setScrollTop(value: number): void {
@@ -97,21 +96,16 @@ export default class DocView {
     //const rect = this.#canvas.getBoundingClientRect();
     this.#canvas.width = window.devicePixelRatio * this.#canvas.clientWidth;
     this.#canvas.height = window.devicePixelRatio * this.#canvas.clientHeight;
-    //console.log(`set canvas size to ${this.#canvas.width} x ${this.#canvas.height}`);
     this.#scrollInner.style.width = this.#scrollInner.style.minWidth =
       (this.#size.width * this.#zoom) + 'px';
     this.#scrollInner.style.height = (this.#size.height * this.#zoom) + 'px';
     this.#scrollContent.style.width = this.#scrollContent.style.minWidth = this.#size.width + 'px';
     this.#scrollContent.style.height = this.#size.height + 'px';
     this.#scrollContent.style.transform = 'scale(' + this.#zoom + ')';
-    //console.log(`set transform to ${this.#scrollContent.style.transform}`);
     this.updateVisibleSubrect();
   }
   // In |fast| condition, it's okay to be a bit ugly.
   updateGLState(glController: GLController, fast: boolean): void {
-    if (!fast) {
-      console.log('update gl state slow');
-    }
     const gl = glController.glContext();
     if (gl === null) {
       console.log(`Unable to get valid GL render context`);
@@ -183,7 +177,6 @@ export default class DocView {
     gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(vertices), gl.STATIC_DRAW);
     gl.bindBuffer(gl.ARRAY_BUFFER, this.bgColorBuffer);
     gl.bufferData(gl.ARRAY_BUFFER, new Uint8Array(vertexColors), gl.STATIC_DRAW);
-    //console.log(vertices);
   }
   glStateLost(): void {
     this.bgVertices = null;
@@ -226,10 +219,6 @@ export default class DocView {
     mat3.translate(transform, transform, [-1, 1]);
     mat3.scale(transform, transform, [2 / this.#visibleSubrect.size.width,
                                      -2 / this.#visibleSubrect.size.height]);
-    // const goodTransform = [2 / this.#visibleSubrect.size.width, 0, 0,
-    //   0, -2 / this.#visibleSubrect.size.height, 0,
-    //   -1, 1, 1];
-    //   console.log(goodTransform);
     mat3.translate(transform, transform, [-this.#visibleSubrect.origin.x, -this.#visibleSubrect.origin.y]);
     gl.uniformMatrix3fv(program.getULocation('transform'), false, transform);
     gl.drawArrays(gl.TRIANGLES, 0, 12 * this.bgPositionPages.size());
@@ -239,11 +228,6 @@ export default class DocView {
       const pageTransform = mat3.create();
       mat3.translate(pageTransform, transform, [this.#pageLocations[i].origin.x,
                                                 this.#pageLocations[i].origin.y]);
-      // const outVec = vec3.create();
-      // vec3.transformMat3(outVec, [0, 0, 1], pageTransform);
-      // const outBR = vec3.create();
-      // vec3.transformMat3(outBR, [this.#pageLocations[i].size.width, this.#pageLocations[i].size.height, 1], pageTransform);
-      // console.log(`Page ${i}: ${outVec}, ${outBR}`);
       this.#doc.drawGL(glController, i, pageTransform);
     }
   }
@@ -252,26 +236,20 @@ export default class DocView {
   public scrolled(): void {
     if (this.scrollLeft === this.#scrollOuter.scrollLeft &&
         this.scrollTop === this.#scrollOuter.scrollTop) {
-      console.log(`skipping scroll event handler`);
       this.scrollTop = this.scrollLeft = -1;
       return;
-    } else {
-      console.log(`scroll lefts: ${this.scrollLeft} vs ${this.#scrollOuter.scrollLeft}`);
     }
     if (this.pointerEventHandler === null) {
       if (this.recentScrollTimeout) {
         window.clearTimeout(this.recentScrollTimeout);
       }
       this.recentScrollTimeout = window.setTimeout(() => {
-        console.log(`time fired`);
         this.recentScrollTimeout = null;
         this.updateVisibleSubrect();
       }, 50);
     }
-    console.log(`in scrolled(), updating visible subrect`);
     this.updateVisibleSubrect();
   }
-  private prevVX: number = 0;
   private updateVisibleSubrect(): void {
     // Adjust margins of scrollInner to keep it centered
     let marginLeft = 0;
@@ -281,7 +259,6 @@ export default class DocView {
       const style = getComputedStyle(this.#scrollInner);
       marginLeft = parseFloat(style.marginLeft);
       marginTop = parseFloat(style.marginTop);
-      console.log(`got margins: ${marginLeft}, ${marginTop}`);
     }
 
     // see which subrect of inner is visible
@@ -290,9 +267,6 @@ export default class DocView {
         (this.#scrollOuter.scrollTop - marginTop) / this.#zoom,
         this.#scrollOuter.clientWidth / this.#zoom,
         this.#scrollOuter.clientHeight / this.#zoom);
-    let vx = this.#visibleSubrect.origin.x * this.#zoom;
-    console.log(`${vx - this.prevVX} (new is ${this.#scrollOuter.scrollLeft} / ${this.#zoom})`);
-    this.prevVX = vx;
     if (this.viewportChangedCallback) {
       this.viewportChangedCallback(this.pointerEventHandler !== null ||
                                    this.recentScrollTimeout !== null);
@@ -308,8 +282,6 @@ export default class DocView {
     this.setScrollLeft(dz * (prevCX + oldScrollLeft) - currCX);
     this.setScrollTop( dz * (prevCY + oldScrollTop)  - currCY);
     this.updateDOM();
-    //console.log(`set scroll left to ${this.#scrollOuter.scrollLeft} (${dz} ${currCX} ${prevCX}) (old ${oldScrollLeft})`);
-    //console.log(`origin pt: ${this.#visibleSubrect.origin}`)
   }
 
   private pointerEventHandler: PointerEventHandler | null = null;
@@ -399,7 +371,6 @@ class PointerEventHandler {
     let currDistSq: number = this.pointerEventCache.get(ids[0])![0].distSq(this.pointerEventCache.get(ids[1])![0]);
     let dz = Math.sqrt(currDistSq / prevDistSq);
     // Apply to the view
-    console.log(`XA: ${this.pointerEventCache.get(ids[0])![0].x} ${prevX0} XB: ${this.pointerEventCache.get(ids[1])![0].x} ${prevX1}`)
     this.docView.handlePinch(prevCX, prevCY, currCX, currCY, dz);
   }
 
