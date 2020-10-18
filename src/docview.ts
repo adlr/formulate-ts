@@ -50,9 +50,10 @@ export default class DocView {
     this.#scrollOuter.addEventListener('pointerdown', (event) => { this.pointerDown(event); })
     this.#scrollOuter.addEventListener('pointermove', (event) => { this.pointerMove(event); })
     this.#scrollOuter.addEventListener('pointerup', (event) => { this.pointerUp(event); })
-    this.#scrollOuter.addEventListener('pointercancel', (event) => { this.pointerUp(event); })
+    this.#scrollOuter.addEventListener('pointercancel', (event) => { this.pointerCancel(event); })
     this.#scrollOuter.addEventListener('pointerout', (event) => { this.pointerUp(event); })
     this.#scrollOuter.addEventListener('pointerleave', (event) => { this.pointerUp(event); })
+    this.#scrollOuter.addEventListener('wheel', (event) => { this.onWheel(event); });
   }
   // Call this when number of pages or sizes of pages change. Will reload from the doc
   public pagesChanged(): void {
@@ -79,6 +80,19 @@ export default class DocView {
     this.#size.set(maxWidth + BORDER_WIDTH * 2, top);
     this.updateDOM();
   }
+
+  // Own setters for scroll left/top. The reason for this is to avoid triggering
+  // the scroll event handler when we set these ourselves.
+  private scrollLeft: number = -1;
+  private scrollTop: number = -1;
+  private setScrollLeft(value: number): void {
+    console.log(`updating scrollLeft: ${this.#scrollOuter.scrollLeft} -> ${value}`);
+    this.#scrollOuter.scrollLeft = this.scrollLeft = value;
+  }
+  private setScrollTop(value: number): void {
+    this.#scrollOuter.scrollTop = this.scrollTop = value;
+  }
+
   private updateDOM(): void {
     //const rect = this.#canvas.getBoundingClientRect();
     this.#canvas.width = window.devicePixelRatio * this.#canvas.clientWidth;
@@ -236,16 +250,28 @@ export default class DocView {
   // scroll event handler
   private recentScrollTimeout: number | null = null;
   public scrolled(): void {
-    if (this.recentScrollTimeout) {
-      window.clearTimeout(this.recentScrollTimeout);
+    if (this.scrollLeft === this.#scrollOuter.scrollLeft &&
+        this.scrollTop === this.#scrollOuter.scrollTop) {
+      console.log(`skipping scroll event handler`);
+      this.scrollTop = this.scrollLeft = -1;
+      return;
+    } else {
+      console.log(`scroll lefts: ${this.scrollLeft} vs ${this.#scrollOuter.scrollLeft}`);
     }
-    this.recentScrollTimeout = window.setTimeout(() => {
-      console.log(`time fired`);
-      this.recentScrollTimeout = null;
-      this.updateVisibleSubrect();
-    }, 20);
+    if (this.pointerEventHandler === null) {
+      if (this.recentScrollTimeout) {
+        window.clearTimeout(this.recentScrollTimeout);
+      }
+      this.recentScrollTimeout = window.setTimeout(() => {
+        console.log(`time fired`);
+        this.recentScrollTimeout = null;
+        this.updateVisibleSubrect();
+      }, 50);
+    }
+    console.log(`in scrolled(), updating visible subrect`);
     this.updateVisibleSubrect();
   }
+  private prevVX: number = 0;
   private updateVisibleSubrect(): void {
     // Adjust margins of scrollInner to keep it centered
     let marginLeft = 0;
@@ -255,6 +281,7 @@ export default class DocView {
       const style = getComputedStyle(this.#scrollInner);
       marginLeft = parseFloat(style.marginLeft);
       marginTop = parseFloat(style.marginTop);
+      console.log(`got margins: ${marginLeft}, ${marginTop}`);
     }
 
     // see which subrect of inner is visible
@@ -263,47 +290,61 @@ export default class DocView {
         (this.#scrollOuter.scrollTop - marginTop) / this.#zoom,
         this.#scrollOuter.clientWidth / this.#zoom,
         this.#scrollOuter.clientHeight / this.#zoom);
+    let vx = this.#visibleSubrect.origin.x * this.#zoom;
+    console.log(`${vx - this.prevVX} (new is ${this.#scrollOuter.scrollLeft} / ${this.#zoom})`);
+    this.prevVX = vx;
     if (this.viewportChangedCallback) {
-      this.viewportChangedCallback(this.pointerEventCache.size > 0 ||
+      this.viewportChangedCallback(this.pointerEventHandler !== null ||
                                    this.recentScrollTimeout !== null);
     }    
   }
   onViewportChanged(callback: (boolean) => void): void {
     this.viewportChangedCallback = callback;
   }
-
-  private pointerEventCache: Map<number, Point> = new Map;
-  private getPointWithoutID(id: number): Point {
-    for (const item of this.pointerEventCache.entries()) {
-      if (item[0] != id)
-        return item[1];
-    }
-    throw new Error("Cant' find finger without ID " + id);
+  public handlePinch(prevCX: number, prevCY: number, currCX: number, currCY: number, dz: number): void {
+    const oldScrollLeft = this.#scrollOuter.scrollLeft;
+    const oldScrollTop = this.#scrollOuter.scrollTop;
+    this.#zoom *= dz;
+    this.setScrollLeft(dz * (prevCX + oldScrollLeft) - currCX);
+    this.setScrollTop( dz * (prevCY + oldScrollTop)  - currCY);
+    this.updateDOM();
+    //console.log(`set scroll left to ${this.#scrollOuter.scrollLeft} (${dz} ${currCX} ${prevCX}) (old ${oldScrollLeft})`);
+    //console.log(`origin pt: ${this.#visibleSubrect.origin}`)
   }
+
+  private pointerEventHandler: PointerEventHandler | null = null;
   pointerDown(event: PointerEvent) {
-    this.pointerEventCache.set(event.pointerId, new Point(event.clientX, event.clientY));
+    if (this.pointerEventHandler === null) {
+      this.pointerEventHandler = new PointerEventHandler(this);
+    }
+    this.pointerEventHandler.pointerDown(event);
   }
   pointerUp(event: PointerEvent) {
-    this.pointerEventCache.delete(event.pointerId);
-    this.updateDOM();
+    if (this.pointerEventHandler === null)
+      return;
+    const handler = this.pointerEventHandler;
+    handler.pointerUp(event);
+    if (handler.empty()) {
+      this.pointerEventHandler = null;
+    }
+    this.updateVisibleSubrect();
+  }
+  pointerCancel(event: PointerEvent) {
+    if (this.pointerEventHandler === null)
+      return;
+    this.pointerEventHandler.pointerCancel(event);
   }
   pointerMove(event: PointerEvent) {
-    if (!this.pointerEventCache.has(event.pointerId)) {
+    if (this.pointerEventHandler === null)
       return;
+    this.pointerEventHandler.pointerMove(event);
+  }
+
+  onWheel(event: WheelEvent) {
+    if (event.ctrlKey) {
+      console.log(`zoom`);
+      event.preventDefault();
     }
-    if (this.pointerEventCache.size == 2) {
-      const prev: Point = this.pointerEventCache.get(event.pointerId)!;
-      const pointerIDs = this.pointerEventCache.keys();
-      const otherPrev: Point = this.getPointWithoutID(event.pointerId);
-      const dx = event.clientX - prev.x;
-      const dy = event.clientY - prev.y;
-      const prevDz = Math.sqrt((prev.x - otherPrev.x) * (prev.x - otherPrev.x) + (prev.y - otherPrev.y) * (prev.y - otherPrev.y));
-      const dz = Math.sqrt((event.clientX - otherPrev.x) * (event.clientX - otherPrev.x) + (event.clientY - otherPrev.y) * (event.clientY - otherPrev.y));
-      // update DOM and state
-      this.#zoom *= dz / prevDz;
-      this.updateDOM();
-    }
-    this.pointerEventCache.get(event.pointerId)!.set(event.clientX, event.clientY);
   }
 
   // Coordinate conversion
@@ -314,5 +355,76 @@ export default class DocView {
   convertRectToPageInPlace(pageno: number, rect: Rect): void {
     rect.origin.x -= this.#pageLocations[pageno].origin.x;
     rect.origin.y -= this.#pageLocations[pageno].origin.y;
+  }
+}
+
+// This class is created when the first finger touches and deleted
+// after the last finger lifts off. It handles the gesture recognition
+// for scrolling/zooming.
+class PointerEventHandler {
+  // Store current ([0]) and previous ([1]) positions per finger
+  private pointerEventCache: Map<number, Array<Point>> = new Map;
+  private pointerMoveRafRequested: boolean = false;
+  private docView: DocView;
+
+  constructor(docView: DocView) {
+    this.docView = docView;
+  }
+  empty(): boolean {
+    if (this.pointerMoveRafRequested && this.pointerEventCache.size === 0)
+      console.log(`Warning: might delete PointerEventHandler with outstanding RAF`);
+    return this.pointerEventCache.size === 0;
+  }
+  private pointersMoved() {
+    this.pointerMoveRafRequested = false;
+    // Do moves
+    if (this.pointerEventCache.size !== 2)
+      return;
+    let ids: Array<number> = [];
+    for (const item of this.pointerEventCache) {
+      ids.push(item[0]);
+    }
+    let prevX1 = this.pointerEventCache.get(ids[1])![1].x;
+    let prevX0 = this.pointerEventCache.get(ids[0])![1].x;
+    let prevY1 = this.pointerEventCache.get(ids[1])![1].y;
+    let prevY0 = this.pointerEventCache.get(ids[0])![1].y;
+    if (prevX0 < 0 || prevX1 < 0)
+      return;
+    let prevCX: number = (prevX0 + prevX1) / 2;
+    let prevCY: number = (prevY0 + prevY1) / 2;
+    let currCX: number = (this.pointerEventCache.get(ids[0])![0].x + this.pointerEventCache.get(ids[1])![0].x) / 2;
+    let currCY: number = (this.pointerEventCache.get(ids[0])![0].y + this.pointerEventCache.get(ids[1])![0].y) / 2;
+    //'dz = sqrt(cdsq / pdsq)'
+    let prevDistSq: number = this.pointerEventCache.get(ids[0])![1].distSq(this.pointerEventCache.get(ids[1])![1]);
+    let currDistSq: number = this.pointerEventCache.get(ids[0])![0].distSq(this.pointerEventCache.get(ids[1])![0]);
+    let dz = Math.sqrt(currDistSq / prevDistSq);
+    // Apply to the view
+    console.log(`XA: ${this.pointerEventCache.get(ids[0])![0].x} ${prevX0} XB: ${this.pointerEventCache.get(ids[1])![0].x} ${prevX1}`)
+    this.docView.handlePinch(prevCX, prevCY, currCX, currCY, dz);
+  }
+
+  // Raw callbacks:
+  pointerDown(event: PointerEvent) {
+    this.pointerEventCache.set(event.pointerId, [new Point(event.clientX, event.clientY), new Point(-1, -1)]);
+  }
+  pointerMove(event: PointerEvent) {
+    if (!this.pointerEventCache.has(event.pointerId)) {
+      return;
+    }
+    if (this.pointerEventCache.size !== 2)
+      return;
+    const history: Array<Point> = this.pointerEventCache.get(event.pointerId)!;
+    history[1].setFromPoint(history[0]);
+    history[0].set(event.clientX, event.clientY);
+    if (!this.pointerMoveRafRequested) {
+      requestAnimationFrame(() => { this.pointersMoved(); });
+      this.pointerMoveRafRequested = true;
+    }
+  }
+  pointerUp(event: PointerEvent) {
+    this.pointerEventCache.delete(event.pointerId);
+  }
+  pointerCancel(event: PointerEvent) {
+
   }
 }

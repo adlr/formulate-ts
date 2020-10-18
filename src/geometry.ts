@@ -39,6 +39,16 @@ export class Point {
     this.x = x;
     this.y = y;
   }
+  setFromPoint(that: Point): void {
+    this.x = that.x;
+    this.y = that.y;
+  }
+  // returns the square of the distance between |this| and |that|
+  distSq(that: Point): number {
+    const dx = this.x - that.x;
+    const dy = this.y - that.y;
+    return (dx * dx) + (dy * dy);
+  }
 }
 
 // |Rect|s grow downward as height increases
