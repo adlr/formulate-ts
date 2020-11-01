@@ -25,7 +25,8 @@ body {
   display: flex;
   position: absolute;
   overflow: auto;
-  touch-action: pan-x pan-y;
+  touch-action: none;
+  border: 1px solid #555;
 }
 
 #doc-scroll-inner {

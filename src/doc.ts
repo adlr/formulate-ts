@@ -4,10 +4,7 @@ import PDFDoc from "./pdfdoc";
 import { Rect, Size } from "./geometry";
 import { GLController, Texture } from "./glcontroller";
 import { mat3 } from "gl-matrix";
-
-interface Overlay {
-
-}
+import { Overlay } from "./overlay";
 
 class PageGLState {
   tex: Texture;
@@ -26,11 +23,10 @@ class PageGLState {
 }
 
 export default class Doc {
-  #overlays: Array<Array<Overlay>>;
+  private readonly overlays: Map<number, Array<Overlay>> = new Map();
   #pdfdoc: PDFDoc;
 
   constructor(pdfdoc: PDFDoc) {
-    this.#overlays = [];
     this.#pdfdoc = pdfdoc;
   }
   public pageCount(): number {
@@ -38,6 +34,13 @@ export default class Doc {
   }
   public pageSize(pageno: number): Size {
     return this.#pdfdoc.pageSize(pageno);
+  }
+
+  public addOverlay(pageno: number, overlay: Overlay): void {
+    if (!this.overlays.has(pageno)) {
+      this.overlays.set(pageno, []);
+    }
+    this.overlays.get(pageno)!.push(overlay);
   }
 
   pageGLState: Map<number, PageGLState> = new Map();
@@ -57,6 +60,17 @@ export default class Doc {
   // GL state
   // |outSize| is in pixels, |rect| is page coordinates
   updateGLState(glController: GLController, fast: boolean, pageno: number, rect: Rect, outSize: Size): void {
+    this.updatePDFPageGLState(glController, fast, pageno, rect, outSize);
+    if (this.overlays.has(pageno)) {
+      const arr = this.overlays.get(pageno)!;
+      for (let i = 0; i < arr.length; i++) {
+        arr[i].updateGLState(glController, fast);
+      }
+    }
+  }
+  // GL state
+  // |outSize| is in pixels, |rect| is page coordinates
+  updatePDFPageGLState(glController: GLController, fast: boolean, pageno: number, rect: Rect, outSize: Size): void {
     if (fast)
       return;
     const gl = glController.glContext();
@@ -115,6 +129,11 @@ export default class Doc {
   }
   glStateLost(): void {
     this.pageGLState.clear();
+    this.overlays.forEach((arr) => {
+      for (let i = 0; i < arr.length; i++) {
+        arr[i].glStateLost();
+      }
+    });
   }
   // draw the scene. If |transform| is applied to the gl program, then the coordinates
   // passed in should be page coordinates.
@@ -153,5 +172,13 @@ export default class Doc {
     gl.uniform1i(glController.drawTex.getULocation('u_texture'), 0);
     gl.uniformMatrix3fv(glController.drawTex.getULocation('transform'), false, transform);
     gl.drawArrays(gl.TRIANGLES, 0, 6);
+
+    // Draw overlays
+    if (this.overlays.has(pageno)) {
+      const arr = this.overlays.get(pageno)!;
+      for (let i = 0; i < arr.length; i++) {
+        arr[i].drawGL(glController, transform);
+      }
+    }
   }
 }

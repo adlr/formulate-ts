@@ -4,6 +4,8 @@ import { Size, Rect, Point, Range, NonNull } from "./geometry";
 import Doc from "./doc";
 import { GLController, GLProgram, Texture } from "./glcontroller";
 import { mat3, vec3 } from "gl-matrix";
+import { Overlay } from "./overlay";
+import DocController from "./doccontroller";
 
 function assertDefined<T>(input : T | null): T {
   if (input === null || input === undefined) {
@@ -55,6 +57,16 @@ export default class DocView {
     this.#scrollOuter.addEventListener('pointerleave', (event) => { this.pointerUp(event); })
     this.#scrollOuter.addEventListener('wheel', (event) => { this.onWheel(event); });
   }
+
+  private controller: DocController | null = null;
+  setController(controller: DocController) {
+    this.controller = controller;
+  }
+
+  getZoom(): number {
+    return this.#zoom;
+  }
+
   // Call this when number of pages or sizes of pages change. Will reload from the doc
   public pagesChanged(): void {
     // Compute the new size
@@ -104,6 +116,7 @@ export default class DocView {
     this.#scrollContent.style.transform = 'scale(' + this.#zoom + ')';
     this.updateVisibleSubrect();
   }
+
   // In |fast| condition, it's okay to be a bit ugly.
   updateGLState(glController: GLController, fast: boolean): void {
     const gl = glController.glContext();
@@ -125,17 +138,14 @@ export default class DocView {
       this.setGLBGBorders(gl, pages);
     }
 
-    // If we're not being fast, update textures
-    if (!fast) {
-      const start = Math.min(pages.start, this.bgPositionPages.start);
-      const end = Math.max(pages.end, this.bgPositionPages.end);
-      for (let i = start; i < end; i++) {
-        const pageRect = this.#visibleSubrect.intersect(this.#pageLocations[i]);
-        this.convertRectToPageInPlace(i, pageRect);
-        const outSize = new Size(pageRect.size.width * this.#zoom * window.devicePixelRatio,
-                                 pageRect.size.height * this.#zoom * window.devicePixelRatio);
-        this.#doc.updateGLState(glController, false, i, pageRect, outSize);
-      }
+    const start = Math.min(pages.start, this.bgPositionPages.start);
+    const end = Math.max(pages.end, this.bgPositionPages.end);
+    for (let i = start; i < end; i++) {
+      const pageRect = this.#visibleSubrect.intersect(this.#pageLocations[i]);
+      this.convertRectToPageInPlace(i, pageRect);
+      const outSize = new Size(pageRect.size.width * this.#zoom * window.devicePixelRatio,
+                                pageRect.size.height * this.#zoom * window.devicePixelRatio);
+      this.#doc.updateGLState(glController, fast, i, pageRect, outSize);
     }
     
     this.bgPositionPages.set(pages.start, pages.end);
@@ -287,7 +297,12 @@ export default class DocView {
   private pointerEventHandler: PointerEventHandler | null = null;
   pointerDown(event: PointerEvent) {
     if (this.pointerEventHandler === null) {
-      this.pointerEventHandler = new PointerEventHandler(this);
+      const handler = NonNull(this.controller).handlePointerDown(event);
+      if (handler) {
+        this.pointerEventHandler = handler;
+      } else {
+        this.pointerEventHandler = new PanZoomPointerEventHandler(this);
+      }
     }
     this.pointerEventHandler.pointerDown(event);
   }
@@ -328,12 +343,46 @@ export default class DocView {
     rect.origin.x -= this.#pageLocations[pageno].origin.x;
     rect.origin.y -= this.#pageLocations[pageno].origin.y;
   }
+  pageForPoint(point: Point): number {
+    for (let i = 0; i < this.#pageLocations.length; i++) {
+      const rect = this.#pageLocations[i];
+      if (point.y < rect.bottom() + BORDER_WIDTH / 2)
+        return i;
+    }
+    return this.#pageLocations.length - 1;
+  }
+  convertPointToPageInPlace(pageno: number, point: Point): void {
+    point.x -= this.#pageLocations[pageno].origin.x;
+    point.y -= this.#pageLocations[pageno].origin.y;
+  }
+  // Convert a point from scroll outer's coordinate space to the view's space
+  convertScrollOuterPointInPlace(point: Point): void {
+    point.x = point.x / this.#scrollOuter.clientWidth * this.#visibleSubrect.size.width / this.#zoom;
+    point.x += this.#visibleSubrect.origin.x;
+    point.y = point.y / this.#scrollOuter.clientHeight * this.#visibleSubrect.size.height / this.#zoom;
+    point.x += this.#visibleSubrect.origin.y;
+  }
+  pointFromEvent(event: PointerEvent): Point {
+    const rect = this.#scrollInner.getBoundingClientRect();
+    const pt = new Point(event.clientX - rect.left, event.clientY - rect.top);
+    pt.x /= this.#zoom;
+    pt.y /= this.#zoom;
+    return pt;
+  }
+}
+
+export interface PointerEventHandler {
+  pointerDown: (event: PointerEvent) => void;
+  pointerMove: (event: PointerEvent) => void;
+  pointerUp: (event: PointerEvent) => void;
+  pointerCancel: (event: PointerEvent) => void;
+  empty: () => boolean;
 }
 
 // This class is created when the first finger touches and deleted
 // after the last finger lifts off. It handles the gesture recognition
 // for scrolling/zooming.
-class PointerEventHandler {
+class PanZoomPointerEventHandler implements PointerEventHandler {
   // Store current ([0]) and previous ([1]) positions per finger
   private pointerEventCache: Map<number, Array<Point>> = new Map;
   private pointerMoveRafRequested: boolean = false;

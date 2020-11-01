@@ -49,6 +49,10 @@ export class Point {
     const dy = this.y - that.y;
     return (dx * dx) + (dy * dy);
   }
+  closeTo(that: Point): boolean {
+    const THRESHOLD = 0.001;
+    return this.distSq(that) < (THRESHOLD * THRESHOLD);
+  }
 }
 
 // |Rect|s grow downward as height increases
@@ -127,6 +131,9 @@ export class Rect {
   }
   intersectWith(rect: Rect): void {
     this.intersectWithLTRB(rect.left(), rect.top(), rect.right(), rect.bottom());
+  }
+  intersectWithPoint(point: Point): void {
+    this.intersectWithLTRB(point.x, point.y, point.x, point.y);
   }
   intersect(rect: Rect): Rect {
     const ret = Rect.FromRect(this);
