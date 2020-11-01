@@ -399,42 +399,61 @@ class PanZoomPointerEventHandler implements PointerEventHandler {
   private pointersMoved() {
     this.pointerMoveRafRequested = false;
     // Do moves
-    if (this.pointerEventCache.size !== 2)
+    if (this.pointerEventCache.size > 2)
       return;
-    let ids: Array<number> = [];
-    for (const item of this.pointerEventCache) {
-      ids.push(item[0]);
+    let prevCX: number = 0;
+    let prevCY: number = 0;
+    let currCX: number = 0;
+    let currCY: number = 0;
+    let dz: number = 1;
+    if (this.pointerEventCache.size === 1) {
+      for (const item of this.pointerEventCache) {
+        prevCX = item[1][1].x;
+        prevCY = item[1][1].y;
+        currCX = item[1][0].x;
+        currCY = item[1][0].y;
+      }
+    } else {
+      let ids: Array<number> = [];
+      for (const item of this.pointerEventCache) {
+        ids.push(item[0]);
+      }
+      let prevX1 = this.pointerEventCache.get(ids[1])![1].x;
+      let prevX0 = this.pointerEventCache.get(ids[0])![1].x;
+      let prevY1 = this.pointerEventCache.get(ids[1])![1].y;
+      let prevY0 = this.pointerEventCache.get(ids[0])![1].y;
+      if (prevX0 < 0 || prevX1 < 0)
+        return;
+      prevCX = (prevX0 + prevX1) / 2;
+      prevCY = (prevY0 + prevY1) / 2;
+      currCX = (this.pointerEventCache.get(ids[0])![0].x + this.pointerEventCache.get(ids[1])![0].x) / 2;
+      currCY = (this.pointerEventCache.get(ids[0])![0].y + this.pointerEventCache.get(ids[1])![0].y) / 2;
+      //'dz = sqrt(cdsq / pdsq)'
+      let prevDistSq: number = this.pointerEventCache.get(ids[0])![1].distSq(this.pointerEventCache.get(ids[1])![1]);
+      let currDistSq: number = this.pointerEventCache.get(ids[0])![0].distSq(this.pointerEventCache.get(ids[1])![0]);
+      dz = Math.sqrt(currDistSq / prevDistSq);
     }
-    let prevX1 = this.pointerEventCache.get(ids[1])![1].x;
-    let prevX0 = this.pointerEventCache.get(ids[0])![1].x;
-    let prevY1 = this.pointerEventCache.get(ids[1])![1].y;
-    let prevY0 = this.pointerEventCache.get(ids[0])![1].y;
-    if (prevX0 < 0 || prevX1 < 0)
-      return;
-    let prevCX: number = (prevX0 + prevX1) / 2;
-    let prevCY: number = (prevY0 + prevY1) / 2;
-    let currCX: number = (this.pointerEventCache.get(ids[0])![0].x + this.pointerEventCache.get(ids[1])![0].x) / 2;
-    let currCY: number = (this.pointerEventCache.get(ids[0])![0].y + this.pointerEventCache.get(ids[1])![0].y) / 2;
-    //'dz = sqrt(cdsq / pdsq)'
-    let prevDistSq: number = this.pointerEventCache.get(ids[0])![1].distSq(this.pointerEventCache.get(ids[1])![1]);
-    let currDistSq: number = this.pointerEventCache.get(ids[0])![0].distSq(this.pointerEventCache.get(ids[1])![0]);
-    let dz = Math.sqrt(currDistSq / prevDistSq);
+    // Move current to previous
+    for (const item of this.pointerEventCache) {
+      item[1][1].setFromPoint(item[1][0]);
+    }
     // Apply to the view
     this.docView.handlePinch(prevCX, prevCY, currCX, currCY, dz);
   }
 
   // Raw callbacks:
   pointerDown(event: PointerEvent) {
-    this.pointerEventCache.set(event.pointerId, [new Point(event.clientX, event.clientY), new Point(-1, -1)]);
+    const point = new Point(event.clientX, event.clientY);
+    const point2 = new Point(event.clientX, event.clientY);
+    this.pointerEventCache.set(event.pointerId, [point, point2]);
   }
   pointerMove(event: PointerEvent) {
     if (!this.pointerEventCache.has(event.pointerId)) {
       return;
     }
-    if (this.pointerEventCache.size !== 2)
+    if (this.pointerEventCache.size > 2)
       return;
     const history: Array<Point> = this.pointerEventCache.get(event.pointerId)!;
-    history[1].setFromPoint(history[0]);
     history[0].set(event.clientX, event.clientY);
     if (!this.pointerMoveRafRequested) {
       requestAnimationFrame(() => { this.pointersMoved(); });
@@ -445,6 +464,6 @@ class PanZoomPointerEventHandler implements PointerEventHandler {
     this.pointerEventCache.delete(event.pointerId);
   }
   pointerCancel(event: PointerEvent) {
-
+    this.pointerUp(event);
   }
 }
