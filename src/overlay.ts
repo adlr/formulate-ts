@@ -3,6 +3,7 @@
 import { mat3 } from "gl-matrix";
 import { NonNull, Point, Rect } from "./geometry";
 import { GLController, GLProgram } from "./glcontroller";
+import { TextOverlay, TextOverlayDelegate } from "./textoverlay";
 
 export interface Overlay {
   bounds: Rect;
@@ -24,7 +25,11 @@ export enum OverlayType {
   FREEHAND,
 }
 
-export function CreateOverlay(type: OverlayType): Overlay {
+export function CreateOverlay(type: OverlayType, textDelegate: TextOverlayDelegate): Overlay {
+  if (type === OverlayType.TEXT) {
+    console.log(`returning a text overlay`);
+    return new TextOverlay(textDelegate);
+  }
   return new PenOverlay();
 }
 
@@ -39,7 +44,7 @@ class PenOverlay implements Overlay {
     if (point.closeTo(this.points[this.points.length - 1]))
       return;
     this.points.push(point);
-    this.bounds.intersectWithPoint(point);
+    this.bounds.expandToIncludePoint(point);
   }
   placeEnd(): void {
   }

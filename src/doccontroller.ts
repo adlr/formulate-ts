@@ -4,11 +4,12 @@ import { userInfo } from "os";
 import { threadId } from "worker_threads";
 import Doc from "./doc";
 import DocView, { PointerEventHandler } from "./docview";
-import { Point } from "./geometry";
+import { NonNull, Point, Rect } from "./geometry";
 import { GLController } from "./glcontroller";
 import { CreateOverlay, Overlay, OverlayType } from "./overlay";
+import { TextOverlay, TextOverlayDelegate } from "./textoverlay";
 
-export default class DocController {
+export default class DocController implements TextOverlayDelegate {
   private readonly docView: DocView;
   private readonly doc: Doc;
   private readonly glController: GLController;
@@ -25,8 +26,8 @@ export default class DocController {
     this.tool = type;
   }
   handlePointerDown(event: PointerEvent): PointerEventHandler | null {
-    if (this.tool === OverlayType.FREEHAND) {
-      const newOverlay = CreateOverlay(this.tool);
+    if (this.tool !== OverlayType.NONE) {
+      const newOverlay = CreateOverlay(this.tool, this);
       return new DocControllerPointerEventHandler(this.docView, this, this.doc, newOverlay);
     }
     return null;
@@ -45,7 +46,24 @@ export default class DocController {
       this.docView.updateGLState(this.glController, this.redrawFast);
       this.docView.drawGL(this.glController, this.glController.colorTrianges);
       this.redrawRequested = false;
-  });
+    });
+  }
+
+  // Text Overlay delegate methods
+  removeDiv(div: HTMLDivElement): void {
+    div.remove();
+  }
+  placeDiv(overlay: TextOverlay, div: HTMLDivElement, absolutePositionRect: Rect): void {
+    const pageno: number = this.doc.pageForOverlay(overlay);
+    const rect = Rect.FromRect(absolutePositionRect);
+    this.docView.convertRectFromPageInPlace(pageno, rect);
+    div.style.position = 'absolute';
+    div.style.width = rect.size.width + 'px';
+    div.style.height = rect.size.height + 'px';
+    div.style.left = rect.origin.x + 'px';
+    div.style.top = rect.origin.y + 'px';
+    const parent = NonNull(document.querySelector('#doc-content'));
+    parent.appendChild(div);
   }
 }
 

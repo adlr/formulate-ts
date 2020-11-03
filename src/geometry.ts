@@ -11,7 +11,7 @@ export class Size {
     return new Size(size.width, size.height);
   }
   toString(): string {
-    return `Size(${this.width}, ${this.height})`;
+    return `Size(${this.width.toFixed(2)}, ${this.height.toFixed(2)})`;
   }
   set(width: number, height: number): void {
     this.width = width;
@@ -32,8 +32,11 @@ export class Point {
     this.x = x;
     this.y = y;
   }
+  static FromPoint(that: Point): Point {
+    return new Point(that.x, that.y);
+  }
   toString(): string {
-    return `Point(${this.x}, ${this.y})`;
+    return `Point(${this.x.toFixed(2)}, ${this.y.toFixed(2)})`;
   }
   set(x: number, y: number): void {
     this.x = x;
@@ -74,7 +77,7 @@ export class Rect {
     return Rect.FromSizeOrigin(rect.size, rect.origin);
   }
   toString(): string {
-    return `Rect(${this.size}, ${this.origin})`;
+    return `Rect(${this.origin}, ${this.size})`;
   }
   set(x: number, y: number, width: number, height: number): void {
     this.size.width = width;
@@ -132,8 +135,11 @@ export class Rect {
   intersectWith(rect: Rect): void {
     this.intersectWithLTRB(rect.left(), rect.top(), rect.right(), rect.bottom());
   }
-  intersectWithPoint(point: Point): void {
-    this.intersectWithLTRB(point.x, point.y, point.x, point.y);
+  expandToIncludePoint(point: Point): void {
+    this.setLeft(Math.min(this.left(), point.x));
+    this.setRight(Math.max(this.right(), point.x));
+    this.setTop(Math.min(this.top(), point.y));
+    this.setBottom(Math.max(this.bottom(), point.y));
   }
   intersect(rect: Rect): Rect {
     const ret = Rect.FromRect(this);

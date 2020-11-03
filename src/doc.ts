@@ -42,6 +42,13 @@ export default class Doc {
     }
     this.overlays.get(pageno)!.push(overlay);
   }
+  public pageForOverlay(overlay: Overlay): number {
+    for (let item of this.overlays) {
+      if (item[1].includes(overlay))
+        return item[0];
+    }
+    throw new Error(`can't find page for overlay!`);
+  }
 
   pageGLState: Map<number, PageGLState> = new Map();
 
