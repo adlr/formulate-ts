@@ -49,6 +49,21 @@ export default class DocController implements TextOverlayDelegate {
     });
   }
 
+  private editingOverlay: Overlay | null = null;
+  startEditing(overlay: Overlay): void {
+    if (this.editingOverlay !== null)
+      this.stopEditing();
+    if (overlay.isEditable()) {
+      this.editingOverlay = overlay;
+      this.editingOverlay.startEditing();
+    }
+  }
+  stopEditing(): void {
+    if (this.editingOverlay !== null)
+      this.editingOverlay.stopEditing();
+    this.editingOverlay = null;
+  }
+
   // Text Overlay delegate methods
   removeDiv(div: HTMLDivElement): void {
     div.remove();
@@ -58,8 +73,6 @@ export default class DocController implements TextOverlayDelegate {
     const rect = Rect.FromRect(absolutePositionRect);
     this.docView.convertRectFromPageInPlace(pageno, rect);
     div.style.position = 'absolute';
-    div.style.width = rect.size.width + 'px';
-    div.style.height = rect.size.height + 'px';
     div.style.left = rect.origin.x + 'px';
     div.style.top = rect.origin.y + 'px';
     const parent = NonNull(document.querySelector('#doc-content'));
@@ -104,6 +117,9 @@ class DocControllerPointerEventHandler implements PointerEventHandler {
     this.docView.convertPointToPageInPlace(this.pageno, point);
     this.overlay.placeEnd(point);
     this.fingersDown.delete(event.pointerId);
+    if (this.overlay.isEditable()) {
+      this.docController.startEditing(this.overlay);
+    }
   }
   pointerCancel(event: PointerEvent) {
     this.pointerUp(event);

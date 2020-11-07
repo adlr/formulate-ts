@@ -13,6 +13,11 @@ export interface Overlay {
   placeMove: (point: Point) => void;
   placeEnd: (point: Point) => void;
 
+  isEditable: () => boolean;
+  isEditing: () => boolean;
+  startEditing: () => void;
+  stopEditing: () => void;
+
   // drawing
   updateGLState: (glController: GLController, fast: boolean) => void;
   glStateLost: () => void;
@@ -48,6 +53,11 @@ class PenOverlay implements Overlay {
   }
   placeEnd(): void {
   }
+
+  isEditable(): boolean { return false; }
+  isEditing(): boolean { return false; }
+  startEditing(): void {}
+  stopEditing(): void {}
 
   // Drawing
   private verticesBuf: WebGLBuffer | null = null;

@@ -266,9 +266,10 @@ export default class DocView {
     let marginTop = 0;
     if (this.#scrollOuter.scrollLeft === 0 ||
         this.#scrollOuter.scrollTop === 0) {
-      const style = getComputedStyle(this.#scrollInner);
-      marginLeft = parseFloat(style.marginLeft);
-      marginTop = parseFloat(style.marginTop);
+      const outerStyle = getComputedStyle(this.#scrollOuter);
+      const innerStyle = getComputedStyle(this.#scrollInner);
+      marginLeft = Math.max((parseFloat(outerStyle.width) - parseFloat(innerStyle.width)) / 2 | 0, 0);
+      marginTop = Math.max((parseFloat(outerStyle.height) - parseFloat(innerStyle.height)) / 2 | 0, 0);
     }
 
     // see which subrect of inner is visible
@@ -295,7 +296,11 @@ export default class DocView {
   }
 
   private pointerEventHandler: PointerEventHandler | null = null;
+  private readonly docContent: HTMLDivElement = NonNull(document.querySelector("#doc-content"));
   pointerDown(event: PointerEvent) {
+    if (event.target !== this.#scrollOuter && event.target !== this.docContent)
+      return;
+    NonNull(this.controller).stopEditing();
     if (this.pointerEventHandler === null) {
       const handler = NonNull(this.controller).handlePointerDown(event);
       if (handler) {

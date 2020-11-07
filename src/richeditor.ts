@@ -21,15 +21,21 @@ export interface RichEditor {
 
 }
 
-export function CreateRichEditor(parent: HTMLDivElement) {
-  return new QuillRichEditor(parent);
+// Create a rich editor. If |width| is negative, it's set based on the contained text
+export function CreateRichEditor(parent: HTMLDivElement, width: number, text: string) {
+  return new QuillRichEditor(parent, width, text);
 }
 
 class QuillRichEditor implements RichEditor {
   private readonly quill: Quill;
-  constructor(parent: HTMLDivElement) {
-    parent.id = 'quill-editor';
-    parent.style.height = 'auto';
+  constructor(parent: HTMLDivElement, width: number, text: string) {
+    // make a new div for Quill, since it seems to reach outside the given div.
+    const div = document.createElement('div');
+    div.id = 'quill-editor';
+    div.style.width = width < 0 ? 'fit-content' : (Math.floor(width) + 2 + 'px');
+    div.style.height = 'auto';
+    div.innerHTML = text;
+    parent.appendChild(div);
     this.quill = new Quill('#quill-editor', {
       modules: { toolbar: false },
       placeholder: 'Text',
@@ -38,6 +44,7 @@ class QuillRichEditor implements RichEditor {
       console.log('text change');
     });
     this.quill.enable();
+    setTimeout(() => { this.quill.focus(); }, 50);
   }
 }
 
