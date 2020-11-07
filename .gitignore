@@ -4,3 +4,4 @@ undefined/
 demo.pdf
 pdflib/*.d
 pdflib/*.o
+*~
