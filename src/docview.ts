@@ -323,11 +323,6 @@ export default class DocView {
   }
   pointerMove(event: PointerEvent) {
     if (this.pointerEventHandler === null) {
-      const pt = this.pointFromEvent(event);
-      const pg = this.pageForPoint(pt);
-      const docPt = Point.FromPoint(pt);
-      this.convertPointToPageInPlace(pg, pt);
-      console.log(`${docPt} / ${pg}, ${pt}`);
       return;
     }
     this.pointerEventHandler.pointerMove(event);
