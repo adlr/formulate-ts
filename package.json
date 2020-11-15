@@ -3,6 +3,7 @@
   "version": "0.0.1",
   "description": "formulate testing",
   "dependencies": {
+    "@rollup/plugin-node-resolve": "^10.0.0",
     "gl-matrix": "^3.3.0",
     "http-server": "^0.12.3",
     "material-design-icons": "^3.0.1",

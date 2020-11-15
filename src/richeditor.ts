@@ -18,7 +18,7 @@ Quill.register({
 // This class is glue to the Quill editor
 
 export interface RichEditor {
-
+  text: () => string;
 }
 
 // Create a rich editor. If |width| is negative, it's set based on the contained text
@@ -45,6 +45,9 @@ class QuillRichEditor implements RichEditor {
     });
     this.quill.enable();
     setTimeout(() => { this.quill.focus(); }, 50);
+  }
+  text(): string {
+    return this.quill.root.innerHTML;
   }
 }
 

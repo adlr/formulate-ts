@@ -2,6 +2,7 @@
 
 import { mat3 } from "gl-matrix";
 import { Rect, Size } from "./geometry";
+import { Texture } from "./glcontroller";
 
 interface PDFium {
   openFile(buf: number, size: number): void;
@@ -48,10 +49,7 @@ export default class PDFDoc {
     return new Size(this.#pdfium.getPageWidth(pageno),
                     this.#pdfium.getPageHeight(pageno));
   }
-  public render(pageno: number, pageRect: Rect, outSize: Size, gl: WebGLRenderingContext): WebGLTexture {
-    const tex = gl.createTexture();
-    if (tex === null)
-      throw new Error("Unable to allocate GL texture");
+  public render(pageno: number, pageRect: Rect, outSize: Size, gl: WebGLRenderingContext): Texture {
     const pixWidth = Math.round(outSize.width);
     const pixHeight = Math.round(outSize.height);
     // Render the texture
@@ -62,22 +60,13 @@ export default class PDFDoc {
     const bufPtr: number = this.#pdfium.render(pageno, pixWidth, pixHeight,
         tr[0], tr[1], tr[3], tr[4], tr[6], tr[7]);
     if (bufPtr === 0) {
-      gl.deleteTexture(tex);
       throw new Error(`Render of page ${pageno} failed`);
     }
     // copy data to the texture and free the data from wasm
     let arr = new Uint8ClampedArray(PDFDoc.module.HEAPU8.buffer,
         bufPtr, pixWidth * pixHeight * 4);
-    gl.bindTexture(gl.TEXTURE_2D, tex);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
-
-    // gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE,
-    //   new Uint8Array([0, 0, 255, 255]));
-
-    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, pixWidth, pixHeight, 0, gl.RGBA, gl.UNSIGNED_BYTE, arr);
+    const ret: Texture = new Texture(gl, arr, new Size(pixWidth, pixHeight), pageRect);
     this.#pdfium.freeBuf(bufPtr);
-    return tex;
+    return ret;
   }
 }

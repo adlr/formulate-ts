@@ -1,20 +1,70 @@
 // Copyright...
 
-import { Rect, Size } from "./geometry";
+import { NonNull, Rect, Size } from "./geometry";
 
 export class Texture {
   tex: WebGLTexture;
   size: Size;  // in pixels
   pageLoc: Rect;  // page coordinates
-  constructor(tex: WebGLTexture, size: Size, pageLoc: Rect) {
-    this.tex = tex;
+  posBuf: WebGLBuffer;
+  texCoordBuf: WebGLBuffer;  // TODO: share one for all Texture objects
+  // constructor(tex: WebGLTexture, size: Size, pageLoc: Rect) {
+  //   this.tex = tex;
+  //   this.size = size;
+  //   this.pageLoc = pageLoc;
+  // }
+  constructor(gl: WebGLRenderingContext, pointer: Uint8ClampedArray, size: Size, pageLoc: Rect) {
+    this.tex = NonNull(gl.createTexture());
     this.size = size;
     this.pageLoc = pageLoc;
+
+    gl.bindTexture(gl.TEXTURE_2D, this.tex);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, size.width, size.height, 0, gl.RGBA, gl.UNSIGNED_BYTE, pointer);
+    this.posBuf = NonNull(gl.createBuffer());
+    gl.bindBuffer(gl.ARRAY_BUFFER, this.posBuf);
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([
+      pageLoc.left(), pageLoc.top(),
+      pageLoc.left(), pageLoc.bottom(),
+      pageLoc.right(), pageLoc.top(),
+      pageLoc.left(), pageLoc.bottom(),
+      pageLoc.right(), pageLoc.top(),
+      pageLoc.right(), pageLoc.bottom(),
+    ]), gl.STATIC_DRAW);
+    this.texCoordBuf = NonNull(gl.createBuffer());
+    gl.bindBuffer(gl.ARRAY_BUFFER, this.texCoordBuf);
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([
+      0, 0,
+      0, 1,
+      1, 0,
+      0, 1,
+      1, 0,
+      1, 1,
+    ]), gl.STATIC_DRAW);
+    this.free = () => {
+      gl.deleteTexture(this.tex);
+      gl.deleteBuffer(this.posBuf);
+      gl.deleteBuffer(this.texCoordBuf);
+      this.size.reset();
+      this.pageLoc.reset();
+    }
   }
-  free(gl: WebGLRenderingContext): void {
-    gl.deleteTexture(this.tex);
-    this.size.reset();
-    this.pageLoc.reset();
+  public free: () => void;
+  // free(gl: WebGLRenderingContext): void {
+  // }
+  // Update the gl buffer coordinates based on the new page coordinates
+  pageLocUpdated(gl: WebGLRenderingContext): void {
+    gl.bindBuffer(gl.ARRAY_BUFFER, this.posBuf);
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([
+      this.pageLoc.left(), this.pageLoc.top(),
+      this.pageLoc.left(), this.pageLoc.bottom(),
+      this.pageLoc.right(), this.pageLoc.top(),
+      this.pageLoc.left(), this.pageLoc.bottom(),
+      this.pageLoc.right(), this.pageLoc.top(),
+      this.pageLoc.right(), this.pageLoc.bottom(),
+    ]), gl.STATIC_DRAW);
   }
   // Returns true iff |rect| (in page coords) is covered by |pageLoc|.
   // If |size| is passed and |rect| is covered, returns true iff the covered size is at least

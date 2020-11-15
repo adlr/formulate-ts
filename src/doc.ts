@@ -1,7 +1,7 @@
 // Copyright...
 
 import PDFDoc from "./pdfdoc";
-import { Rect, Size } from "./geometry";
+import { NonNull, Rect, Size } from "./geometry";
 import { GLController, Texture } from "./glcontroller";
 import { mat3 } from "gl-matrix";
 import { Overlay } from "./overlay";
@@ -16,7 +16,7 @@ class PageGLState {
     this.texCoordBuf = texCoordBuf;
   }
   free(gl: WebGLRenderingContext): void {
-    this.tex.free(gl);
+    this.tex.free();
     gl.deleteBuffer(this.positionBuf);
     gl.deleteBuffer(this.texCoordBuf);
   }
@@ -67,11 +67,13 @@ export default class Doc {
   // GL state
   // |outSize| is in pixels, |rect| is page coordinates
   updateGLState(glController: GLController, fast: boolean, pageno: number, rect: Rect, outSize: Size): void {
+    const gl = NonNull(glController.glContext());
     this.updatePDFPageGLState(glController, fast, pageno, rect, outSize);
+    const zoom = outSize.width / rect.size.width;
     if (this.overlays.has(pageno)) {
       const arr = this.overlays.get(pageno)!;
       for (let i = 0; i < arr.length; i++) {
-        arr[i].updateGLState(glController, fast);
+        arr[i].updateGLState(gl, fast, zoom);
       }
     }
   }
@@ -103,12 +105,12 @@ export default class Doc {
     //console.log(`Original render size: ${outSize}`);
     this.expandRenderAreaInPlace(pageno, rect, outSize);
     //console.log(`Expanded render size: ${outSize}`);
-    const tex: Texture = new Texture(this.#pdfdoc.render(pageno, rect, outSize, gl), outSize, rect);
+    const tex: Texture = this.#pdfdoc.render(pageno, rect, outSize, gl);
     // Set up coordinate bufs
     const posBuf = gl.createBuffer();
     const texCoordBuf = gl.createBuffer();
     if (posBuf === null || texCoordBuf === null) {
-      tex.free(gl);
+      tex.free();
       console.log(`Unable to allocate GL Buffer`);
       return;
     }

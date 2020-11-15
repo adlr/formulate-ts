@@ -19,7 +19,7 @@ export interface Overlay {
   stopEditing: () => void;
 
   // drawing
-  updateGLState: (glController: GLController, fast: boolean) => void;
+  updateGLState: (gl: WebGLRenderingContext, fast: boolean, zoom: number) => void;
   glStateLost: () => void;
   drawGL: (glController: GLController, transform: mat3) => void;
 }
@@ -63,13 +63,8 @@ class PenOverlay implements Overlay {
   private verticesBuf: WebGLBuffer | null = null;
   private colorsBuf: WebGLBuffer | null = null;
   private pointsInBuf: number = 0;
-  updateGLState(glController: GLController, fast: boolean): void {
+  updateGLState(gl: WebGLRenderingContext, fast: boolean, zoom: number): void {
     if (this.pointsInBuf === this.points.length) {
-      return;
-    }
-    const gl = glController.glContext();
-    if (gl === null) {
-      console.log(`Unable to get valid GL render context`);
       return;
     }
     if (this.verticesBuf === null) {
