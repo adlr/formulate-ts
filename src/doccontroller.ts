@@ -68,13 +68,13 @@ export default class DocController implements TextOverlayDelegate {
   removeDiv(div: HTMLDivElement): void {
     div.remove();
   }
-  placeDiv(overlay: TextOverlay, div: HTMLDivElement, absolutePositionRect: Rect): void {
+  placeDiv(overlay: TextOverlay, div: HTMLDivElement, x: number, y: number): void {
     const pageno: number = this.doc.pageForOverlay(overlay);
-    const rect = Rect.FromRect(absolutePositionRect);
-    this.docView.convertRectFromPageInPlace(pageno, rect);
+    const point: Point = new Point(x, y);
+    this.docView.convertPointFromPageInPlace(pageno, point);
     div.style.position = 'absolute';
-    div.style.left = rect.origin.x + 'px';
-    div.style.top = rect.origin.y + 'px';
+    div.style.left = point.x + 'px';
+    div.style.top = point.y + 'px';
     const parent = NonNull(document.querySelector('#doc-content'));
     parent.appendChild(div);
   }

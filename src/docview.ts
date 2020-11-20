@@ -205,6 +205,8 @@ export default class DocView {
     gl.viewport(outerRect.left * dpi, 0,
                 outerRect.width * dpi, outerRect.height * dpi);
     gl.useProgram(program.program);
+    gl.enable(gl.BLEND);
+    gl.blendFuncSeparate(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA, gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
     gl.bindBuffer(gl.ARRAY_BUFFER, this.bgVertices);
     gl.enableVertexAttribArray(program.getAttrLocation('position'));
     gl.vertexAttribPointer(
@@ -361,6 +363,10 @@ export default class DocView {
     point.x -= this.#pageLocations[pageno].origin.x;
     point.y -= this.#pageLocations[pageno].origin.y;
   }
+  convertPointFromPageInPlace(pageno: number, point: Point): void {
+    point.x += this.#pageLocations[pageno].origin.x;
+    point.y += this.#pageLocations[pageno].origin.y;
+  }
   // Convert a point from scroll outer's coordinate space to the view's space
   convertScrollOuterPointInPlace(point: Point): void {
     point.x = point.x / this.#scrollOuter.clientWidth * this.#visibleSubrect.size.width / this.#zoom;
@@ -370,7 +376,10 @@ export default class DocView {
   }
   pointFromEvent(event: PointerEvent): Point {
     const rect = this.#scrollInner.getBoundingClientRect();
-    const pt = new Point(event.clientX - rect.left, event.clientY - rect.top);
+    const ratio = 1 / (window.devicePixelRatio || 1);
+    const clientX = ((event.clientX / ratio) | 0) * ratio;
+    const clientY = ((event.clientY / ratio) | 0) * ratio;
+    const pt = new Point(clientX - rect.left, clientY - rect.top);
     pt.x /= this.#zoom;
     pt.y /= this.#zoom;
     return pt;

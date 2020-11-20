@@ -26,7 +26,6 @@ body {
   position: absolute;
   overflow: auto;
   touch-action: none;
-  border: 1px solid #555;
 }
 
 #doc-scroll-inner {

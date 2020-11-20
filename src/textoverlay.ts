@@ -11,8 +11,8 @@ export interface TextOverlayDelegate {
   // Remove div from the DOM tree
   removeDiv: (div: HTMLDivElement) => void;
 
-  // Place div into the DOM tree with the given coordinates
-  placeDiv: (overlay: TextOverlay, div: HTMLDivElement, absolutePositionRect: Rect) => void;
+  // Place div into the DOM tree with the given (x, y) coordinates
+  placeDiv: (overlay: TextOverlay, div: HTMLDivElement, x: number, y: number) => void;
 }
 
 const MAX_WIDTH = 1000;
@@ -57,9 +57,8 @@ export class TextOverlay implements Overlay {
     console.log(`text area place end rect: ${this.bounds}`);
     // Create div
     this.editingDiv = document.createElement('div');
-    this.editingDiv.style.border = '1px solid #000';
     this.editingDiv.style.width = MAX_WIDTH + 'px';
-    this.delegate.placeDiv(this, this.editingDiv, this.bounds);
+    this.delegate.placeDiv(this, this.editingDiv, this.bounds.origin.x - 1, this.bounds.origin.y - 1);
     this.richEditor = CreateRichEditor(this.editingDiv,
                                        this.fixedWidth ? this.bounds.size.width : -1,
                                        this.htmlText);
@@ -103,7 +102,6 @@ export class TextOverlay implements Overlay {
     }
     if (this.texture === null)
       return;
-    console.log(`drawing text overlay`);
     gl.useProgram(glController.drawTex.program);
     gl.bindBuffer(gl.ARRAY_BUFFER, this.texture.posBuf);
     gl.enableVertexAttribArray(glController.drawTex.getAttrLocation('position'));

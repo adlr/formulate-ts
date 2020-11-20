@@ -31,7 +31,7 @@ function TryLoadFontMgr(): void {
     return;
   if (CanvasKit === null)
     return;
-  if (fonts.size !== 2)
+  if (fonts.size !== fontsToLoad.length)
     return;
   const fontData: Array<ArrayBuffer> = [];
   for (let item of fonts) {
@@ -46,7 +46,23 @@ CanvasKitInit({locateFile: (file) => '../canvaskit/bin/core/' + file }).then((ck
 });
 
 let fonts: Map<string, ArrayBuffer> = new Map();
-let fontsToLoad: Array<string> = ['OpenSans-Regular', 'NotoColorEmoji'];
+let fontsToLoad: Array<string> = [
+  'Merriweather-BoldItalic',
+  'Merriweather-Bold',
+  'Merriweather-Italic',
+  'Merriweather-Regular',
+  'NotoColorEmoji',
+  'NotoEmoji-Regular',
+  'NotoSansSymbols2-Regular',
+  'NotoSansSymbols-Bold',
+  'NotoSansSymbols-Regular',
+  'OpenSans-BoldItalic',
+  'OpenSans-Bold',
+  'OpenSans-Italic',
+  'OpenSans-Regular',
+  'Roboto-Regular',
+  'WnznHAc5bAfYB2QRah7pcpNvOx-pjfJ9SII',
+];
 fontsToLoad.forEach((name) => {
   fetch(`../fonts/${name}.ttf`).then((resp) => {
     resp.arrayBuffer().then((buffer) => {
@@ -109,7 +125,7 @@ export default class RichRender {
     outSize.height = Math.max(1, outSize.height);
     const surface = CanvasKit.MakeSurface(outSize.width, outSize.height);
     const canvas = surface.getCanvas();
-    canvas.clear(CanvasKit.CYAN);
+    canvas.clear(CanvasKit.TRANSPARENT);
     canvas.scale(zoom, zoom);
     if (height > 1) {
       canvas.drawParagraph(this.paragraph, 0, 0);
@@ -138,7 +154,7 @@ class TextStyle {
     this.italic = italic;
   }
   static DefaultStyle(): TextStyle {
-    return new TextStyle(['Open Sans', 'Noto Color Emoji'], 12, false, false);
+    return new TextStyle(['Open Sans', 'Noto Color Emoji'], 13, false, false);
   }
   copy(): TextStyle {
     return new TextStyle([...this.fonts], this.size, this.bold, this.italic);
