@@ -72,24 +72,25 @@ export default class RichRender {
   }
   setText(text: string): void {
     const paraStyle = new CanvasKit.ParagraphStyle({
-      textStyle: {
-        color: CanvasKit.BLACK,
-        fontFamilies: ['Open Sans', 'Noto Color Emoji'],
-        fontSize: 12,
-      },
+      textStyle: TextStyle.DefaultStyle().toSkia(),
       textAlign: CanvasKit.TextAlign.Left,
       maxLines: 999,
       ellipsis: '...',
     });
-  
     const builder = CanvasKit.ParagraphBuilder.Make(paraStyle, FontMgr);
-    builder.addText(text);
+    parseHTML(text, (fragment: string, style: TextStyle) => {
+      builder.pushStyle(style.toSkia());
+      console.log(`adding text: ${fragment}`);
+      builder.addText(fragment);
+      builder.pop();
+    });
     this.paragraph = builder.build();
   }
   // returns true if changes were made
   wrap(width: number): boolean {
     if (width == this.lastWrappedAt)
       return false;
+    console.log(`wrapping text to ${width}`);
     this.paragraph.layout(width);
     this.lastWrappedAt = width;
     return true;
@@ -98,6 +99,7 @@ export default class RichRender {
     this.lastRenderZoom = zoom;
     const height: number = this.paragraph.getHeight();
     const width: number = this.paragraph.getLongestLine();
+    console.log(`render width: ${width} height: ${height}`);
     const rect: Rect = new Rect(origin.x, origin.y, width, height);
     const outSize: Size = new Size(Math.ceil(width * zoom), Math.ceil(height * zoom));
     // Since we rounded up `outSize`, let's correct `rect` accordingly
@@ -122,4 +124,80 @@ export default class RichRender {
   lastRenderedZoom(): number { return this.lastRenderZoom; }
   renderToPDF() {
   }
+}
+
+class TextStyle {
+  fonts: Array<string>;
+  size: number;
+  bold: boolean;
+  italic: boolean;
+  constructor(fonts: Array<string>, size: number, bold: boolean, italic: boolean) {
+    this.fonts = fonts;
+    this.size = size;
+    this.bold = bold;
+    this.italic = italic;
+  }
+  static DefaultStyle(): TextStyle {
+    return new TextStyle(['Open Sans', 'Noto Color Emoji'], 12, false, false);
+  }
+  copy(): TextStyle {
+    return new TextStyle([...this.fonts], this.size, this.bold, this.italic);
+  }
+  toSkia(): Object {
+    return CanvasKit.TextStyle({
+      fontFamilies: this.fonts,
+      fontSize: this.size,
+      fontStyle: {
+        weight: this.bold ? CanvasKit.FontWeight.Bold : CanvasKit.FontWeight.Normal,
+        slant: this.italic ? CanvasKit.FontSlant.Italic : CanvasKit.FontSlant.Upright,
+      },
+    });
+  }
+}
+
+function parseHTML(html: string, pushText: (text: string, style: Object) => void): void {
+  const template = document.createElement('template');
+  template.innerHTML = html;
+  const root = template.content.cloneNode(true);
+  const styles: Array<TextStyle> = [TextStyle.DefaultStyle()];
+  let onFirstParagraph: boolean = true;
+
+  const handleElement = (node: Element) => {
+    styles.push(styles[styles.length - 1].copy());
+    const topStyle: TextStyle = styles[styles.length - 1];
+    if (node.tagName === "P") {
+      if (onFirstParagraph === false)
+        pushText("\n", styles[styles.length - 1]);
+    }
+    if (node.tagName === "B") {
+      topStyle.bold = true;
+    }
+    if (node.tagName === "I") {
+      topStyle.italic = true;
+    }
+    if (node.hasChildNodes()) {
+      innerWalk(node.childNodes);
+    }
+    if (node.tagName === "P") {
+      onFirstParagraph = false;
+    }
+    styles.pop();
+  };
+
+  const innerWalk = (nodes: NodeListOf<ChildNode>) => {
+    for (let i = 0; i < nodes.length; i++) {
+      const node = nodes[i];
+      switch (node.nodeType) {
+        case Node.ELEMENT_NODE:
+          handleElement(<Element>node);
+          break;
+        case Node.TEXT_NODE:
+          pushText(NonNull(node.textContent), styles[styles.length - 1]);
+          break;
+        default:
+          throw new Error(`Unhandled nodetype ${node.nodeType}`);
+      }
+    }
+  };
+  innerWalk(root.childNodes);
 }
