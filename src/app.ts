@@ -33,6 +33,12 @@ async function setupLoadedDoc(response) {
   let group = new ButtonSelectGroup([new Button(NonNull(document.querySelector('#tb-tool-arrow'))),
                                      new Button(NonNull(document.querySelector('#tb-tool-text'))),
                                      new Button(NonNull(document.querySelector('#tb-tool-freehand')))]);
+  const saveButton = new Button(NonNull(document.querySelector('#tb-save')));
+  saveButton.onClick(() => {
+    console.log(`save doc`);
+    pdfdoc.saveDocument();
+  });
+  saveButton.setEnabled(true);
   group.onChange((index: number) => {
     docController.toolChanged(index);
   });

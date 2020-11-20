@@ -6,8 +6,10 @@
 #include <vector>
 
 #include <emscripten.h>
+#include <emscripten/bind.h>
 
 #include "public/fpdfview.h"
+#include "public/fpdf_save.h"
 #include "public/cpp/fpdf_scopers.h"
 
 namespace {
@@ -91,6 +93,16 @@ double GetPageHeight(int pageno) {
 }
 
 EMSCRIPTEN_KEEPALIVE
+void GeneragePageContent(int pageno) {
+  FPDF_PAGE page = GetPage(pageno);
+  if (!page) {
+    fprintf(stderr, "Can't find page %d", pageno);
+    return;
+  }
+  FPDFPage_GenerateContent(page);
+}
+
+EMSCRIPTEN_KEEPALIVE
 char* Render(int pageno, int out_width, int out_height,
              float a, float b, float c, float d, float e, float f) {
   const size_t buf_len = out_width * out_height * 4;
@@ -136,3 +148,42 @@ void FreeBuf(char* buf) {
 }
 
 }  // extern "C"
+
+class FileSaver : public FPDF_FILEWRITE {
+ public:
+  FileSaver() {
+    version = 1;
+    WriteBlock = StaticWriteBlock;
+  }
+  ~FileSaver() {
+    fprintf(stderr, "FileSaver deleted\n");
+  }
+  static int StaticWriteBlock(FPDF_FILEWRITE* pthis,
+                              const void* data,
+                              unsigned long size) {
+    FileSaver* fs = static_cast<FileSaver*>(pthis);
+    const char* cdata = static_cast<const char*>(data);
+    fs->data_.insert(fs->data_.end(), cdata, cdata + size);
+    return 1;  // success
+  }
+  std::vector<char> data_;
+  emscripten::val getData() {
+    return emscripten::val(emscripten::typed_memory_view(data_.size(), &data_[0]));
+  }
+};
+
+std::unique_ptr<FileSaver> SaveDoc() {
+  std::unique_ptr<FileSaver> fs(new FileSaver);
+  if (!FPDF_SaveAsCopy(g_doc_, fs.get(), FPDF_REMOVE_SECURITY)) {
+    fprintf(stderr, "FPDF_SaveAsCopy failed\n");
+    return nullptr;
+  }
+  return fs;
+}
+
+EMSCRIPTEN_BINDINGS(file_saver) {
+  emscripten::class_<FileSaver>("FileSaver")
+    .function("getData", &FileSaver::getData)
+    ;
+  emscripten::function("SaveDoc", &SaveDoc);
+}

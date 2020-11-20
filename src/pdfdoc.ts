@@ -49,6 +49,20 @@ export default class PDFDoc {
     return new Size(this.#pdfium.getPageWidth(pageno),
                     this.#pdfium.getPageHeight(pageno));
   }
+  public generateContent(): void {
+
+  }
+  public saveDocument(): void {
+    const fileSaver = PDFDoc.module.SaveDoc();
+    const blob = new Blob([fileSaver.getData()], {type: 'application/pdf'});
+    const data = window.URL.createObjectURL(blob);
+    var link = document.createElement('a');
+    link.href = data;
+    link.download="file.pdf";
+    link.click();
+    fileSaver.delete();
+    setTimeout(() => { window.URL.revokeObjectURL(data); }, 100);
+  }
   public render(pageno: number, pageRect: Rect, outSize: Size, gl: WebGLRenderingContext): Texture {
     const pixWidth = Math.round(outSize.width);
     const pixHeight = Math.round(outSize.height);
