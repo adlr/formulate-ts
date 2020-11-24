@@ -1,0 +1,146 @@
+From 543f9c0c7730effaa4dab9973372dc95d47d4beb Mon Sep 17 00:00:00 2001
+From: Andrew de los Reyes <adlr@chromium.org>
+Date: Tue, 24 Nov 2020 10:24:34 -0800
+Subject: [PATCH 2/2] debug building option and minimal PDF rendering API
+
+---
+ modules/canvaskit/Makefile               | 16 ++++++----
+ modules/canvaskit/canvaskit_bindings.cpp | 38 ++++++++++++++++++++++++
+ modules/canvaskit/compile.sh             |  2 ++
+ modules/canvaskit/cpu.js                 |  3 ++
+ 4 files changed, 54 insertions(+), 5 deletions(-)
+
+diff --git a/modules/canvaskit/Makefile b/modules/canvaskit/Makefile
+index 19c115f33b..523a63d0c6 100644
+--- a/modules/canvaskit/Makefile
++++ b/modules/canvaskit/Makefile
+@@ -64,18 +64,24 @@ profile:
+ 
+ npm:
+ 	rm -rf ./canvaskit/bin
+-	mkdir -p ./canvaskit/bin
++	# mkdir -p ./canvaskit/bin
+ 	# These features are turned off to keep code size smaller for the
+ 	# general use case.
+-	./compile.sh release no_skottie no_particles no_rt_shader no_effects_deserialization
+-	cp ../../out/canvaskit_wasm/canvaskit.js       ./canvaskit/bin
+-	cp ../../out/canvaskit_wasm/canvaskit.wasm     ./canvaskit/bin
++	# ./compile.sh release no_skottie no_particles no_rt_shader no_effects_deserialization
++	# cp ../../out/canvaskit_wasm/canvaskit.js       ./canvaskit/bin
++	# cp ../../out/canvaskit_wasm/canvaskit.wasm     ./canvaskit/bin
+ 
+ 	mkdir -p ./canvaskit/bin/core
+-	./compile.sh release no_skottie no_particles no_pathops no_rt_shader no_skp_serialization no_effects_deserialization
++	./compile.sh release no_skottie no_particles no_pathops no_rt_shader no_skp_serialization no_effects_deserialization no_canvas
+ 	cp ../../out/canvaskit_wasm/canvaskit.js       ./canvaskit/bin/core
+ 	cp ../../out/canvaskit_wasm/canvaskit.wasm     ./canvaskit/bin/core
+ 
++npm-debug:
++	mkdir -p ./canvaskit/bin/core
++	./compile.sh release no_skottie no_particles no_pathops no_rt_shader no_skp_serialization no_effects_deserialization no_canvas debug
++	cp ../../out/canvaskit_wasm_debug/canvaskit.js       ./canvaskit/bin/core
++	cp ../../out/canvaskit_wasm_debug/canvaskit.wasm     ./canvaskit/bin/core
++
+ local-example:
+ 	rm -rf node_modules/canvaskit
+ 	mkdir -p node_modules
+diff --git a/modules/canvaskit/canvaskit_bindings.cpp b/modules/canvaskit/canvaskit_bindings.cpp
+index d6b2f3f08a..5d810bebf1 100644
+--- a/modules/canvaskit/canvaskit_bindings.cpp
++++ b/modules/canvaskit/canvaskit_bindings.cpp
+@@ -39,6 +39,7 @@
+ #include "include/core/SkTypeface.h"
+ #include "include/core/SkTypes.h"
+ #include "include/core/SkVertices.h"
++#include "include/docs/SkPDFDocument.h"
+ #include "include/effects/SkCornerPathEffect.h"
+ #include "include/effects/SkDashPathEffect.h"
+ #include "include/effects/SkDiscretePathEffect.h"
+@@ -86,6 +87,26 @@
+ #include "include/pathops/SkPathOps.h"
+ #endif
+ 
++// Make this hack class since embind can't call ~SkDocument() directly.
++// Since sk_sp<> can call that dtor, we make this class to house the sk_sp.
++class PDFDocument {
++  public:
++    explicit PDFDocument(sk_sp<SkDocument> doc)
++            : doc_(doc) {}
++    SkCanvas* beginPage(SkScalar width, SkScalar height,
++                        uintptr_t /* const SkRect* */ content = 0) {
++        const SkRect* rect = reinterpret_cast<const SkRect*>(content);
++        return doc_->beginPage(width, height, rect);
++    }
++    void endPage() { doc_->endPage(); }
++    void close() { doc_->close(); }
++    sk_sp<SkDocument> doc_;
++};
++
++SkDynamicMemoryWStream* MakeSkDynamicMemoryWStream() {
++    return new SkDynamicMemoryWStream();
++}
++
+ #ifndef SK_NO_FONTS
+ sk_sp<SkFontMgr> SkFontMgr_New_Custom_Data(const uint8_t** datas, const size_t* sizes, int n);
+ #endif
+@@ -1668,6 +1689,23 @@ EMSCRIPTEN_BINDINGS(Skia) {
+ #endif
+         .function("width", &SkSurface::width);
+ 
++    class_<SkDynamicMemoryWStream>("SkDynamicMemoryWStream")
++            .constructor(&MakeSkDynamicMemoryWStream, allow_raw_pointers())
++            .function("detachAsData", optional_override(
++                [](SkDynamicMemoryWStream& self)->sk_sp<SkData> {
++                    sk_sp<SkData> src_bytes = self.detachAsData();
++                    return src_bytes;
++                }), allow_raw_pointers());
++    function("SkPDFMakeDocument", optional_override(
++        [](SkDynamicMemoryWStream* out_stream)->PDFDocument* {
++            SkPDF::Metadata metadata;
++            return new PDFDocument(SkPDF::MakeDocument(out_stream, metadata));
++        }), allow_raw_pointers());
++    class_<PDFDocument>("PDFDocument")
++            .function("beginPage", &PDFDocument::beginPage, allow_raw_pointers())
++            .function("endPage", &PDFDocument::endPage)
++            .function("close", &PDFDocument::close);
++
+ #ifndef SK_NO_FONTS
+     class_<SkTextBlob>("SkTextBlob")
+         .smart_ptr<sk_sp<SkTextBlob>>("sk_sp<SkTextBlob>>")
+diff --git a/modules/canvaskit/compile.sh b/modules/canvaskit/compile.sh
+index cb16511cf2..8a5b39e61f 100755
+--- a/modules/canvaskit/compile.sh
++++ b/modules/canvaskit/compile.sh
+@@ -41,6 +41,7 @@ if [[ $@ == *debug* ]]; then
+   echo "Building a Debug build"
+   EXTRA_CFLAGS="\"-DSK_DEBUG\","
+   RELEASE_CONF="-O0 --js-opts 0 -s DEMANGLE_SUPPORT=1 -s ASSERTIONS=1 -s GL_ASSERTIONS=1 -g4 \
++                --minify 0 --closure 0 \
+                 --source-map-base /node_modules/canvaskit/bin/ -DSK_DEBUG --pre-js $BASE_DIR/debug.js"
+   BUILD_DIR=${BUILD_DIR:="out/canvaskit_wasm_debug"}
+ elif [[ $@ == *profiling* ]]; then
+@@ -391,6 +392,7 @@ EMCC_DEBUG=1 ${EMCXX} \
+     -s FORCE_FILESYSTEM=0 \
+     -s FILESYSTEM=0 \
+     -s MODULARIZE=1 \
++    -s EXPORT_ES6=1 \
+     -s NO_EXIT_RUNTIME=1 \
+     -s INITIAL_MEMORY=128MB \
+     -s WARN_UNALIGNED=1 \
+diff --git a/modules/canvaskit/cpu.js b/modules/canvaskit/cpu.js
+index 102b5b27c3..0fec588765 100644
+--- a/modules/canvaskit/cpu.js
++++ b/modules/canvaskit/cpu.js
+@@ -59,6 +59,9 @@
+         // rasterDirectSurface does not initialize the pixels, so we clear them
+         // to transparent black.
+         surface.getCanvas().clear(CanvasKit.TRANSPARENT);
++        surface['getPixelBuf'] = function() {
++          return new Uint8ClampedArray(CanvasKit.HEAPU8.buffer, pixelPtr, pixelLen);
++        }
+       }
+       return surface;
+     };
+-- 
+2.20.1
+
