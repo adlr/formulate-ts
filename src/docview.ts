@@ -14,7 +14,7 @@ function assertDefined<T>(input : T | null): T {
   return input
 }
 
-const BORDER_WIDTH = 20;
+const BORDER_WIDTH = 16;
 
 export default class DocView {
   #canvas: HTMLCanvasElement;
@@ -105,9 +105,9 @@ export default class DocView {
   }
 
   private updateDOM(): void {
-    //const rect = this.#canvas.getBoundingClientRect();
-    this.#canvas.width = window.devicePixelRatio * this.#canvas.clientWidth;
-    this.#canvas.height = window.devicePixelRatio * this.#canvas.clientHeight;
+    const rect = this.#canvas.getBoundingClientRect();
+    this.#canvas.width = Math.round(window.devicePixelRatio * rect.width);
+    this.#canvas.height = Math.round(window.devicePixelRatio * rect.height);
     this.#scrollInner.style.width = this.#scrollInner.style.minWidth =
       (this.#size.width * this.#zoom) + 'px';
     this.#scrollInner.style.height = (this.#size.height * this.#zoom) + 'px';
@@ -143,6 +143,7 @@ export default class DocView {
     for (let i = start; i < end; i++) {
       const pageRect = this.#visibleSubrect.intersect(this.#pageLocations[i]);
       this.convertRectToPageInPlace(i, pageRect);
+      console.log(`Page visible rect in page coords: ${pageRect}`);
       const outSize = new Size(pageRect.size.width * this.#zoom * window.devicePixelRatio,
                                 pageRect.size.height * this.#zoom * window.devicePixelRatio);
       this.#doc.updateGLState(glController, fast, i, pageRect, outSize);
@@ -172,7 +173,7 @@ export default class DocView {
     for (let i = pages.start; i < pages.end; i++) {
       const rect = this.#pageLocations[i];
       const outer = Rect.FromRect(rect);
-      outer.outsetBy(1);
+      outer.outsetBy(1 / (window.devicePixelRatio || 1));  // hairline border around page
       // first a big black rectangle for the page
       vertices.push(outer.left(), outer.top(), outer.left(), outer.bottom(), outer.right(), outer.top());
       vertices.push(outer.left(), outer.bottom(), outer.right(), outer.top(), outer.right(), outer.bottom());
@@ -201,9 +202,11 @@ export default class DocView {
     }
     const gl = NonNull(glController.glContext());
     const outerRect = this.#scrollOuter.getBoundingClientRect();
-    const dpi = window.devicePixelRatio || 1;
-    gl.viewport(outerRect.left * dpi, 0,
-                outerRect.width * dpi, outerRect.height * dpi);
+    const pixRatio = window.devicePixelRatio || 1;
+    const left = Math.round(outerRect.left * pixRatio);
+    const pixWidth = this.#canvas.width - left;
+    const pixHeight = this.#canvas.height;
+    gl.viewport(left, 0, this.#canvas.width - left, this.#canvas.height);
     gl.useProgram(program.program);
     gl.enable(gl.BLEND);
     gl.blendFuncSeparate(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA, gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
@@ -229,17 +232,17 @@ export default class DocView {
       );
     const transform: mat3 = mat3.create();
     mat3.translate(transform, transform, [-1, 1]);
-    mat3.scale(transform, transform, [2 / this.#visibleSubrect.size.width,
-                                     -2 / this.#visibleSubrect.size.height]);
+    mat3.scale(transform, transform, [2 / (pixWidth / this.#zoom / pixRatio),
+                                     -2 / (pixHeight / this.#zoom / pixRatio)]);
     mat3.translate(transform, transform, [-this.#visibleSubrect.origin.x, -this.#visibleSubrect.origin.y]);
     gl.uniformMatrix3fv(program.getULocation('transform'), false, transform);
     gl.drawArrays(gl.TRIANGLES, 0, 12 * this.bgPositionPages.size());
-
     // Draw each visible page
     for (let i = this.bgPositionPages.start; i < this.bgPositionPages.end; i++) {
       const pageTransform = mat3.create();
       mat3.translate(pageTransform, transform, [this.#pageLocations[i].origin.x,
                                                 this.#pageLocations[i].origin.y]);
+
       this.#doc.drawGL(glController, i, pageTransform);
     }
   }

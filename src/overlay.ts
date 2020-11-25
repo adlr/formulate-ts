@@ -3,10 +3,13 @@
 import { mat3 } from "gl-matrix";
 import { NonNull, Point, Rect } from "./geometry";
 import { GLController, GLProgram } from "./glcontroller";
+import PDFDoc from "./pdfdoc";
 import { TextOverlay, TextOverlayDelegate } from "./textoverlay";
 
 export interface Overlay {
   bounds: Rect;
+
+  saveToPdf: (pdf: PDFDoc, pageno: number) => void;
 
   // placing onto the page
   placeStart: (point: Point) => void;
@@ -19,7 +22,7 @@ export interface Overlay {
   stopEditing: () => void;
 
   // drawing
-  updateGLState: (gl: WebGLRenderingContext, fast: boolean, zoom: number) => void;
+  updateGLState: (gl: WebGLRenderingContext, fast: boolean, rect: Rect, zoom: number) => void;
   glStateLost: () => void;
   drawGL: (glController: GLController, transform: mat3) => void;
 }
@@ -41,6 +44,11 @@ export function CreateOverlay(type: OverlayType, textDelegate: TextOverlayDelega
 class PenOverlay implements Overlay {
   readonly bounds: Rect = new Rect();
   private readonly points: Array<Point> = [];
+
+  saveToPdf(pdf: PDFDoc, pageno: number): void {
+    console.log(`todo: save pen strokes to PDF`);
+  }
+
   placeStart(point: Point): void {
     this.bounds.set(point.x, point.y, 0, 0);
     this.points.push(point);
@@ -63,7 +71,7 @@ class PenOverlay implements Overlay {
   private verticesBuf: WebGLBuffer | null = null;
   private colorsBuf: WebGLBuffer | null = null;
   private pointsInBuf: number = 0;
-  updateGLState(gl: WebGLRenderingContext, fast: boolean, zoom: number): void {
+  updateGLState(gl: WebGLRenderingContext, fast: boolean, rect: Rect, zoom: number): void {
     if (this.pointsInBuf === this.points.length) {
       return;
     }

@@ -4,6 +4,7 @@ import { mat3 } from "gl-matrix";
 import { NonNull, Point, Rect } from "./geometry";
 import { GLController, Texture } from "./glcontroller";
 import { Overlay } from "./overlay";
+import PDFDoc from "./pdfdoc";
 import { CreateRichEditor, RichEditor } from "./richeditor";
 import RichRender from "./richrender";
 
@@ -32,6 +33,16 @@ export class TextOverlay implements Overlay {
     this.delegate = delegate;
   }
 
+  saveToPdf(pdf: PDFDoc, pageno: number): void {
+    this.renderer.renderToPDF((bytes: Uint8Array, width: number, height: number) => {
+      console.log(`PDF is ${bytes.byteLength} bytes long and starts with ${bytes[0]}`);
+      const pdfRect = Rect.FromRect(this.bounds);
+      pdfRect.size.width = width;
+      pdfRect.size.height = height;
+      pdf.addTextOverlayToPage(pageno, bytes, pdfRect, this.htmlText, this.fixedWidth ? this.bounds.size.width : -1);
+    });
+  }
+
   // Event handlers for creating this Overlay
   placeStart(point: Point): void {
     this.bounds.origin.setFromPoint(point);
@@ -54,11 +65,11 @@ export class TextOverlay implements Overlay {
     if (this.texture !== null)
       this.texture.free();
     this.texture = null;
-    console.log(`text area place end rect: ${this.bounds}`);
+    console.log(`text area place end rect: ${this.bounds} (${this.bounds.origin.x * window.devicePixelRatio}, (${this.bounds.origin.y * window.devicePixelRatio})`);
     // Create div
     this.editingDiv = document.createElement('div');
     this.editingDiv.style.width = MAX_WIDTH + 'px';
-    this.delegate.placeDiv(this, this.editingDiv, this.bounds.origin.x - 1, this.bounds.origin.y - 1);
+    this.delegate.placeDiv(this, this.editingDiv, this.bounds.origin.x - 1, this.bounds.origin.y);
     this.richEditor = CreateRichEditor(this.editingDiv,
                                        this.fixedWidth ? this.bounds.size.width : -1,
                                        this.htmlText);
@@ -72,7 +83,7 @@ export class TextOverlay implements Overlay {
   }
 
   // Drawing
-  updateGLState(gl: WebGLRenderingContext, fast: boolean, zoom: number): void {
+  updateGLState(gl: WebGLRenderingContext, fast: boolean, rect: Rect, zoom: number): void {
     if (this.editingDiv !== null)
       return;  // don't do GL when editing
     if (this.htmlText === "")
@@ -85,8 +96,7 @@ export class TextOverlay implements Overlay {
       this.texture = null;
     }
     if (this.texture === null) {
-      console.log(`rendering text`);
-      this.texture = this.renderer.renderToTexture(gl, this.bounds.origin, zoom);
+      this.texture = this.renderer.renderToTexture(gl, this.bounds.origin, rect, zoom);
     }
   }
   glStateLost(): void {

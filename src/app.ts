@@ -36,7 +36,7 @@ async function setupLoadedDoc(response) {
   const saveButton = new Button(NonNull(document.querySelector('#tb-save')));
   saveButton.onClick(() => {
     console.log(`save doc`);
-    pdfdoc.saveDocument();
+    doc.save();
   });
   saveButton.setEnabled(true);
   group.onChange((index: number) => {

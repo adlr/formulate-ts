@@ -1,27 +1,8 @@
 // Copyright...
 
 import { NonNull, Point, Rect, Size } from "./geometry";
-import { GLController, Texture } from "./glcontroller";
+import { Texture } from "./glcontroller";
 import CanvasKitInit from '../canvaskit/bin/core/canvaskit.js';
-
-
-// const canvas = document.createElement('canvas');
-
-// export async function RenderText(glController: GLController, text: string, pageRect: Rect, outSize: Size): Texture {
-//   return new Promise((resolve, reject) => {
-//     const data = 'data:image/svg+xml;charset=utf-8,<svg xmlns="http://www.w3.org/2000/svg" width="' +
-//         outSize.width + '" height="' + outSize.height + '"><foreignObject width="100%" height="100%">' +
-//         text + '</foreignObject></svg>';
-//     const image = new Image();
-//     image.addEventListener('load', () => {
-//       const gl = NonNull(glController.glContext());
-      
-//       resolve(image);
-//     });
-//     image.addEventListener('error', (error) => { reject(error); });
-//     image.src = data;
-// });
-// }
 
 let CanvasKit: any | null = null;
 let FontMgr: any | null = null;
@@ -38,12 +19,8 @@ function TryLoadFontMgr(): void {
     fontData.push(item[1]);
   }
   FontMgr = CanvasKit.SkFontMgr.FromData(fontData);
+  fonts.clear();
 }
-
-CanvasKitInit({locateFile: (file) => '../canvaskit/bin/core/' + file }).then((ck) => {
-  CanvasKit = ck;
-  TryLoadFontMgr();
-});
 
 let fonts: Map<string, ArrayBuffer> = new Map();
 let fontsToLoad: Array<string> = [
@@ -63,15 +40,23 @@ let fontsToLoad: Array<string> = [
   'Roboto-Regular',
   'WnznHAc5bAfYB2QRah7pcpNvOx-pjfJ9SII',
 ];
-fontsToLoad.forEach((name) => {
-  fetch(`../fonts/${name}.ttf`).then((resp) => {
-    resp.arrayBuffer().then((buffer) => {
-      console.log(`${name} loaded`);
-      fonts.set(name, buffer);
-      TryLoadFontMgr();
-    });
+
+// Wait a few seconds for other things to load, since this is not immediately needed on startup
+setTimeout(() => {
+  CanvasKitInit({locateFile: (file) => '../canvaskit/bin/core/' + file }).then((ck) => {
+    CanvasKit = ck;
+    TryLoadFontMgr();
   });
-});
+  fontsToLoad.forEach((name) => {
+    fetch(`../fonts/${name}.ttf`).then((resp) => {
+      resp.arrayBuffer().then((buffer) => {
+        console.log(`${name} loaded`);
+        fonts.set(name, buffer);
+        TryLoadFontMgr();
+      });
+    });
+  });  
+}, 2000);
 
 export default class RichRender {
   private paragraph: any = null;
@@ -101,6 +86,7 @@ export default class RichRender {
       builder.pop();
     });
     this.paragraph = builder.build();
+    builder.delete();
   }
   // returns true if changes were made
   wrap(width: number): boolean {
@@ -111,34 +97,57 @@ export default class RichRender {
     this.lastWrappedAt = width;
     return true;
   }
-  renderToTexture(gl: WebGLRenderingContext, origin: Point, zoom: number): Texture {
+  renderToTexture(gl: WebGLRenderingContext, origin: Point, clipRect: Rect, zoom: number): Texture {
     this.lastRenderZoom = zoom;
     const height: number = this.paragraph.getHeight();
     const width: number = this.paragraph.getLongestLine();
-    console.log(`render width: ${width} height: ${height}`);
     const rect: Rect = new Rect(origin.x, origin.y, width, height);
-    const outSize: Size = new Size(Math.ceil(width * zoom), Math.ceil(height * zoom));
+    rect.intersectWith(clipRect);
+    const outSize: Size = new Size(Math.ceil(rect.size.width * zoom), Math.ceil(rect.size.height * zoom));
     // Since we rounded up `outSize`, let's correct `rect` accordingly
     rect.size.width = outSize.width / zoom;
     rect.size.height = outSize.height / zoom;
     outSize.width = Math.max(1, outSize.width);
     outSize.height = Math.max(1, outSize.height);
+    console.log(`Rendering Pixel size: ${outSize}`);
     const surface = CanvasKit.MakeSurface(outSize.width, outSize.height);
     const canvas = surface.getCanvas();
     canvas.clear(CanvasKit.TRANSPARENT);
     canvas.scale(zoom, zoom);
+    canvas.translate(origin.x - rect.origin.x, origin.y - rect.origin.y);
     if (height > 1) {
       canvas.drawParagraph(this.paragraph, 0, 0);
     }
-    const tex = NonNull(gl.createTexture());
 
-    let arr = new Uint8ClampedArray(CanvasKit.HEAPU8.buffer,
-      surface.pixelPtr, outSize.width * outSize.height * 4);
-
-    return new Texture(gl, arr, outSize, rect);
+    // let arr = new Uint8ClampedArray(CanvasKit.HEAPU8.buffer,
+    //   surface.pixelPtr, outSize.width * outSize.height * 4);
+    const arr: Uint8ClampedArray = surface.getPixelBuf();
+    const ret = new Texture(gl, arr, outSize, rect);
+    console.log(`rendered text tex at ${rect.origin.x}, ${rect.origin.y} (${rect.origin.x * window.devicePixelRatio}, ${rect.origin.y * window.devicePixelRatio})`);
+    surface.dispose();
+    return ret;
   }
   lastRenderedZoom(): number { return this.lastRenderZoom; }
-  renderToPDF() {
+  // Renders the text to a PDF and calls `write` with the resulting bytes.
+  // `write` is called before this method returns, and the data passed to `write` is
+  // only valid during that call.
+  renderToPDF(write: (bytes: Uint8Array, width: number, height: number) => void): void {
+    console.log(`Rendering to PDF!`);
+    const outStream = new CanvasKit.SkDynamicMemoryWStream();
+    const doc = CanvasKit.SkPDFMakeDocument(outStream);
+    const height: number = this.paragraph.getHeight();
+    const width: number = this.paragraph.getLongestLine();
+    const canvas = doc.beginPage(width, height, 0);
+    canvas.drawParagraph(this.paragraph, 0, 0);
+    doc.endPage();
+    doc.close();
+    doc.delete();
+    // make copy of data to return
+    let pdfBuf = outStream.detachAsData();
+    let bytes: Uint8Array = CanvasKit.getSkDataBytes(pdfBuf);
+    write(bytes, width, height);
+    pdfBuf.delete();
+    outStream.delete();
   }
 }
 

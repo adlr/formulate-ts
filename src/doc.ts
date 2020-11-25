@@ -36,6 +36,21 @@ export default class Doc {
     return this.#pdfdoc.pageSize(pageno);
   }
 
+  public save(): void {
+    this.overlays.forEach((overlays: Array<Overlay>, pageno: number) => {
+      const originalObjectCount = this.#pdfdoc.pageCountObjects(pageno);
+      // save overlays to the PDF
+      for (let i = 0; i < overlays.length; i++)
+        overlays[i].saveToPdf(this.#pdfdoc, pageno);
+      // generate page content for changed pages
+      this.#pdfdoc.generateContent(pageno);
+      // remove overlays from page
+      this.#pdfdoc.reducePageObjects(pageno, originalObjectCount);
+    });
+    // push out the doc to the user
+    this.#pdfdoc.saveDocument('output.pdf');
+  }
+
   public addOverlay(pageno: number, overlay: Overlay): void {
     if (!this.overlays.has(pageno)) {
       this.overlays.set(pageno, []);
@@ -70,10 +85,11 @@ export default class Doc {
     const gl = NonNull(glController.glContext());
     this.updatePDFPageGLState(glController, fast, pageno, rect, outSize);
     const zoom = outSize.width / rect.size.width;
+    console.log(`multiply width: ${zoom * rect.size.width}`);
     if (this.overlays.has(pageno)) {
       const arr = this.overlays.get(pageno)!;
       for (let i = 0; i < arr.length; i++) {
-        arr[i].updateGLState(gl, fast, zoom);
+        arr[i].updateGLState(gl, fast, rect, zoom);
       }
     }
   }
@@ -104,6 +120,7 @@ export default class Doc {
     // Render the page
     //console.log(`Original render size: ${outSize}`);
     this.expandRenderAreaInPlace(pageno, rect, outSize);
+    console.log(`rect is now ${rect}`);
     //console.log(`Expanded render size: ${outSize}`);
     const tex: Texture = this.#pdfdoc.render(pageno, rect, outSize, gl);
     // Set up coordinate bufs

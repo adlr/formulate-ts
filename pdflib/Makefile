@@ -27,4 +27,9 @@ OBJS=\
 		-s DEMANGLE_SUPPORT=1 \
 		-s MODULARIZE=1 \
 		-s 'EXPORT_NAME="createPDFLib"' \
+		-s "EXPORTED_FUNCTIONS=[ \
+		  '_FPDFPage_CountObjects', \
+			'_FPDFPage_GetObject', \
+			'_FPDFPage_RemoveObject' \
+			]" \
 		-s TOTAL_MEMORY=268435456
