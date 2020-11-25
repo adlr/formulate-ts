@@ -1,0 +1,120 @@
+From 55f8130780261623fa83d30fb1cb427ae188ae95 Mon Sep 17 00:00:00 2001
+From: Andrew de los Reyes <adlr@chromium.org>
+Date: Fri, 16 Oct 2020 11:58:02 -0700
+Subject: [PATCH] adlr build fixes for wasm
+
+---
+ config/BUILDCONFIG.gn       |  2 ++
+ config/compiler/BUILD.gn    | 28 ++++++++++++++--------------
+ toolchain/gcc_toolchain.gni |  2 +-
+ toolchain/wasm/BUILD.gn     | 19 +++++++++++++++++++
+ 4 files changed, 36 insertions(+), 15 deletions(-)
+ create mode 100644 toolchain/wasm/BUILD.gn
+
+diff --git a/config/BUILDCONFIG.gn b/config/BUILDCONFIG.gn
+index e01150218..a5bafdd7b 100644
+--- a/config/BUILDCONFIG.gn
++++ b/config/BUILDCONFIG.gn
+@@ -254,6 +254,8 @@ if (target_os == "android") {
+   _default_toolchain = "//build/toolchain/win:uwp_$target_cpu"
+ } else if (target_os == "aix") {
+   _default_toolchain = "//build/toolchain/aix:$target_cpu"
++} else if (target_os == "wasm") {
++  _default_toolchain = "//build/toolchain/wasm:wasm"
+ } else {
+   assert(false, "Unsupported target_os: $target_os")
+ }
+diff --git a/config/compiler/BUILD.gn b/config/compiler/BUILD.gn
+index 5a0984f54..5298d2f08 100644
+--- a/config/compiler/BUILD.gn
++++ b/config/compiler/BUILD.gn
+@@ -282,12 +282,12 @@ config("compiler") {
+       cflags += [ "--param=ssp-buffer-size=4" ]
+ 
+       # The x86 toolchain currently has problems with stack-protector.
+-      if (is_android && current_cpu == "x86") {
+-        cflags += [ "-fno-stack-protector" ]
+-      } else if (current_os != "aix") {
+-        # Not available on aix.
+-        cflags += [ "-fstack-protector" ]
+-      }
++      # if (is_android && current_cpu == "x86") {
++      #   cflags += [ "-fno-stack-protector" ]
++      # } else if (current_os != "aix") {
++      #   # Not available on aix.
++      #   cflags += [ "-fstack-protector" ]
++      # }
+     }
+ 
+     # Linker warnings.
+@@ -2264,10 +2264,10 @@ config("symbols") {
+       # Use constructor debug mode. This option reduces debug info more than
+       # -fno-standalone-debug by emitting class type information only when
+       # constructors are emitted.
+-      cflags += [
+-        "-Xclang",
+-        "-debug-info-kind=constructor",
+-      ]
++      #cflags += [
++      #  "-Xclang",
++      #  "-debug-info-kind=constructor",
++      #]
+     }
+   } else {
+     cflags = []
+@@ -2309,10 +2309,10 @@ config("symbols") {
+ 
+     # TODO(https://crbug.com/1050118): Investigate missing debug info on mac.
+     if (is_clang && !is_nacl && !use_xcode_clang && !is_mac && !is_ios) {
+-      cflags += [
+-        "-Xclang",
+-        "-debug-info-kind=constructor",
+-      ]
++      #cflags += [
++      #  "-Xclang",
++      #  "-debug-info-kind=constructor",
++      #]
+     }
+ 
+     if (use_debug_fission && !is_nacl && !is_android) {
+diff --git a/toolchain/gcc_toolchain.gni b/toolchain/gcc_toolchain.gni
+index 06854b73f..64a5a88a7 100644
+--- a/toolchain/gcc_toolchain.gni
++++ b/toolchain/gcc_toolchain.gni
+@@ -332,7 +332,7 @@ template("gcc_toolchain") {
+       } else {
+         rspfile = "{{output}}.rsp"
+         rspfile_content = "{{inputs}}"
+-        command = "\"$ar\" {{arflags}} -r -c -s -D {{output}} @\"$rspfile\""
++        command = "\"$ar\" {{arflags}}rcsD {{output}} @\"$rspfile\""
+       }
+ 
+       # Remove the output file first so that ar doesn't try to modify the
+diff --git a/toolchain/wasm/BUILD.gn b/toolchain/wasm/BUILD.gn
+new file mode 100644
+index 000000000..e6a9fc7fd
+--- /dev/null
++++ b/toolchain/wasm/BUILD.gn
+@@ -0,0 +1,19 @@
++# Copyright 2016 The Chromium Authors. All rights reserved.
++# Use of this source code is governed by a BSD-style license that can be
++# found in the LICENSE file.
++
++import("//build/toolchain/gcc_toolchain.gni")
++
++gcc_toolchain("wasm") {
++  executable_extension = ".js"
++  cc = "emcc"
++  cxx = "em++"
++  ar = "emar"
++  ld = "emcc"
++  toolchain_args = {
++    # Use all values set on the invoker's toolchain_args.
++    #forward_variables_from(invoker.toolchain_args, "*")
++    current_cpu = "wasm"
++    current_os = "wasm"
++  }
++}
+-- 
+2.20.1
+
